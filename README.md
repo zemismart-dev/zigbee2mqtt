@@ -1,0 +1,2 @@
+# zigbee2mqtt
+用于存储zemismar公司产品相关的z2m配置文件
