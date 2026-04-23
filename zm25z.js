@@ -13,7 +13,6 @@ const definition = {
     extend: [tuya.modernExtend.tuyaBase({dp: true})],
     exposes: [
         e.cover_position().setAccess("position", ea.STATE_SET),
-        e.battery(),
         e.enum("motor_direction", ea.STATE_SET, ["forward", "back"])
             .withDescription("Reverse motor direction if open and close are inverted"),
         e.enum("set_limit", ea.SET, ["Set upper limit", "Set lower limit", "Set middle limit"])
@@ -27,7 +26,6 @@ const definition = {
             [2, "position", tuya.valueConverter.coverPosition],
             [3, "position", tuya.valueConverter.coverPosition],
             [5, "motor_direction", tuya.valueConverterBasic.lookup({forward: tuya.enum(0), back: tuya.enum(1)})],
-            [103, "battery", tuya.valueConverter.raw],
             [107, "limit_status", tuya.valueConverterBasic.lookup({
                 no_limit: tuya.enum(0),
                 limit_up_down: tuya.enum(1),
