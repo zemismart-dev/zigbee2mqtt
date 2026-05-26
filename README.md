@@ -1,6 +1,15 @@
 # zigbee2mqtt
-用于存储zemismar公司产品相关的z2m配置文件
 
-- `美标屏幕开关_o409r73p.js`: `_TZE284_o409r73p / TS0601` 两路美标屏显开关，支持开关、计量和屏显名称同步
-- `zm25z.js`: `_TZE200_cirjrpxe / TS0301` ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置
-- `ZN2S-L01E-SMB.js`: `TS0601` Zemismart 1/2/3/4 路场景开关，支持每路在开关模式和场景模式之间切换
+用于存储 Zemismart 公司产品相关的 Zigbee2MQTT external converter 配置文件。
+
+| 配置文件 | Zigbee2MQTT model | 指纹型号 / manufacturerName | 说明 |
+| --- | --- | --- | --- |
+| `214c.js` | `TS0601_water_valve` | `TS0601` / `_TZE284_vuwtqx0t`, `_TZE200_vuwtqx0t` | 超声波水表阀，支持累计/日/月用水、阀门和告警等 DP |
+| `DN15-223F.js` | `TS0601_heat_meter` | `TS0601` / `_TZE200_jt50ea5d` | DN15-223F 超声波热量表，支持热量、水量、温度、电压和周期上报 |
+| `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB` | `TS0601` / `_TZE200_ephrk8to` | 1 路场景开关，支持每路在开关模式和场景模式之间切换 |
+| `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-2G` | `TS0601` / `_TZE200_ahyyfhqk` | 2 路场景开关，支持每路在开关模式和场景模式之间切换 |
+| `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-3G` | `TS0601` / `_TZE200_zuphzsmo` | 3 路场景开关，支持每路在开关模式和场景模式之间切换 |
+| `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-4G` | `TS0601` / `_TZE200_6si1pnia` | 4 路场景开关，支持每路在开关模式和场景模式之间切换 |
+| `zemismart-zps-z1-z2m.js` | `ZPS-Z1` | `zigbeeModel: TS0601`，未限制 manufacturerName | ZPS-Z1 24 GHz 毫米波人体存在传感器 |
+| `zm25z.js` | `TS0301_cirjrpxe` | `TS0301` / `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
+| `zm609.js` | `TS0601_2gang_screen_switch_o409r73p` | `TS0601` / `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p` | ZM609 两路美标屏显开关，支持开关、计量、屏显和配置项 |
