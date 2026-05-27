@@ -6,6 +6,10 @@
 | --- | --- | --- | --- |
 | `214c.js` | `TS0601_water_valve` | `TS0601` / `_TZE284_vuwtqx0t`, `_TZE200_vuwtqx0t` | 超声波水表阀，支持累计/日/月用水、阀门和告警等 DP |
 | `DN15-223F.js` | `TS0601_heat_meter` | `TS0601` / `_TZE200_jt50ea5d` | DN15-223F 超声波热量表，支持热量、水量、温度、电压和周期上报 |
+| `KES-606-composite.js` | `TS0726_1_gang_scene_switch_ovbvmhiq` | `TS0726` / `_TZ3000_ovbvmhiq` | KES 606复合 1 路开关，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
+| `KES-606-composite.js` | `TS0726_2_gang_scene_switch_icoxotza` | `TS0726` / `_TZ3000_icoxotza` | KES 606复合 2 路开关，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
+| `KES-606-composite.js` | `TS0726_3_gang_scene_switch_cziew6eu` | `TS0726` / `_TZ3000_cziew6eu` | KES 606复合 3 路开关，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
+| `KES-606-composite.js` | `TS0726_4_gang_scene_switch_hurauima` | `TS0726` / `_TZ3000_hurauima` | KES 606复合 4 路开关，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB` | `TS0601` / `_TZE200_ephrk8to` | 1 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-2G` | `TS0601` / `_TZE200_ahyyfhqk` | 2 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-3G` | `TS0601` / `_TZE200_zuphzsmo` | 3 路场景开关，支持每路在开关模式和场景模式之间切换 |
