@@ -14,7 +14,7 @@
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-2G` | `TS0601` / `_TZE200_ahyyfhqk` | 2 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-3G` | `TS0601` / `_TZE200_zuphzsmo` | 3 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `ZN2S-L01E-SMB.js` | `ZN2S-L01E-SMB-4G` | `TS0601` / `_TZE200_6si1pnia` | 4 路场景开关，支持每路在开关模式和场景模式之间切换 |
-| `zemismart-zpm1-z2m.js` | `ZMP1` | `TS0601` / `_TZE284_6hrnp30w` | ZMP1 电池窗帘电机，支持开关停、位置、方向、限位和通过 Tuya dataQuery 主动读取电量 |
+| `zemismart-zpm1-z2m.js` | `ZMP1` | `TS0601` / `_TZE284_6hrnp30w` | ZMP1 电池窗帘电机，支持开关停、位置、方向、限位和每 12 小时通过 Tuya dataQuery 主动读取电量 |
 | `zemismart-zps-z1-z2m.js` | `ZPS-Z1` | `zigbeeModel: TS0601`，未限制 manufacturerName | ZPS-Z1 24 GHz 毫米波人体存在传感器 |
 | `zm25z.js` | `TS0301_cirjrpxe` | `TS0301` / `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
 | `zm609.js` | `TS0601_2gang_screen_switch_o409r73p` | `TS0601` / `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p` | ZM609 两路美标屏显开关，支持开关、计量、屏显和配置项 |

@@ -4,6 +4,8 @@ const tuya = require("zigbee-herdsman-converters/lib/tuya");
 const e = exposes.presets;
 const ea = exposes.access;
 
+const batteryQueryIntervalSeconds = 12 * 60 * 60;
+
 const queryDatapoints = async (entity) => {
     await entity.command("manuSpecificTuya", "dataQuery", {});
 };
@@ -22,7 +24,12 @@ const definition = {
     model: "ZMP1",
     vendor: "Zemismart",
     description: "Roller shade driver",
-    extend: [tuya.modernExtend.tuyaBase({dp: true, queryOnConfigure: true, queryOnDeviceAnnounce: true})],
+    extend: [tuya.modernExtend.tuyaBase({
+        dp: true,
+        queryOnConfigure: true,
+        queryOnDeviceAnnounce: true,
+        queryIntervalSeconds: batteryQueryIntervalSeconds,
+    })],
     fromZigbee: [tuya.fz.datapoints],
     toZigbee: [tzLocal.battery_query, tuya.tz.datapoints],
     onEvent: tuya.onEventSetTime,
