@@ -17,4 +17,5 @@
 | `zemismart-zpm1-z2m.js` | `ZMP1` | `TS0601` / `_TZE284_6hrnp30w` | ZMP1 电池窗帘电机，支持开关停、位置、方向、限位和每 12 小时通过 Tuya dataQuery 主动读取电量 |
 | `zemismart-zps-z1-z2m.js` | `ZPS-Z1` | `zigbeeModel: TS0601`，未限制 manufacturerName | ZPS-Z1 24 GHz 毫米波人体存在传感器 |
 | `zm25z.js` | `TS0301_cirjrpxe` | `TS0301` / `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
+| `zms206.js` | `TS0601_1gang_screen_switch_zms206`, `TS0601_2gang_screen_switch_zms206`, `TS0601_3gang_screen_switch_zms206`, `TS0601_4gang_screen_switch_zms206` | `TS0601` / ZMS206 1/2/3/4 路屏显开关指纹 | ZMS206 屏显开关，支持每路开关、屏显名称、倒计时、继电器上电状态、背光、童锁、指示灯颜色和循环计划 |
 | `zm609.js` | `TS0601_2gang_screen_switch_o409r73p` | `TS0601` / `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p` | ZM609 两路美标屏显开关，支持开关、计量、屏显和配置项 |
