@@ -54,73 +54,87 @@ const screenOffTime = tuya.valueConverterBasic.lookup({
     "60": tuya.enum(5),
 });
 
-const definition = {
-    fingerprint: tuya.fingerprint("TS0601", [
-        "_TZE284_o409r73p",
-        "_TZE28C1000000_o409r73p",
-    ]),
-    model: "TS0601_2gang_screen_switch_o409r73p",
-    vendor: "Zemismart",
-    description: "2 gang screen switch with metering",
-    extend: [
-        tuya.modernExtend.tuyaBase({dp: true}),
-        tuya.modernExtend.tuyaWeatherForecast(),
-    ],
-    fromZigbee: [tuya.fz.datapoints, fzLocal.ignoreTuyaConfigureResponse],
-    toZigbee: [
-        screenNameToZigbee("switch1_name", 105),
-        screenNameToZigbee("switch2_name", 106),
-        tuya.tz.datapoints,
-    ],
-    onEvent: tuya.onEventSetTime,
-    configure: async (device, coordinatorEndpoint) => {
-        await tuya.configureMagicPacket(device, coordinatorEndpoint);
-    },
-    endpoint: () => ({l1: 1, l2: 1}),
-    meta: {
-        multiEndpoint: true,
-        tuyaDatapoints: [
-            [1, "state_l1", tuya.valueConverter.onOff],
-            [2, "state_l2", tuya.valueConverter.onOff],
-            [7, "countdown_l1", tuya.valueConverter.countdown],
-            [8, "countdown_l2", tuya.valueConverter.countdown],
-            [13, "_dp13", ignoredDatapoint],
-            [14, "power_on_behavior", tuya.valueConverter.powerOnBehaviorEnum],
-            [16, "radar_switch", tuya.valueConverter.onOff],
-            [20, "energy", tuya.valueConverter.divideBy1000],
-            [21, "current", tuya.valueConverter.divideBy1000],
-            [22, "power", tuya.valueConverter.divideBy10],
-            [23, "voltage", tuya.valueConverter.divideBy10],
-            [29, "power_on_behavior_l1", tuya.valueConverter.powerOnBehaviorEnum],
-            [30, "power_on_behavior_l2", tuya.valueConverter.powerOnBehaviorEnum],
-            [101, "child_lock", tuya.valueConverter.onOff],
-            [102, "backlight", tuya.valueConverter.raw],
-            [104, "radar_distance", radarDistance],
-            [105, "switch1_name", {from: screenNameConverter.from, to: null}],
-            [106, "switch2_name", {from: screenNameConverter.from, to: null}],
-            [111, "screen_off_time", screenOffTime],
-            [112, "_dp112", ignoredDatapoint],
-            [113, "_dp113", ignoredDatapoint],
-        ],
-    },
-    exposes: [
-        e.switch().withEndpoint("l1").setAccess("state", ea.STATE_SET),
-        e.switch().withEndpoint("l2").setAccess("state", ea.STATE_SET),
-        exposes.numeric("countdown_l1", ea.STATE_SET)
-            .withUnit("s")
-            .withValueMin(0)
-            .withValueMax(43200)
-            .withValueStep(1)
-            .withDescription("Countdown for gang 1"),
-        exposes.numeric("countdown_l2", ea.STATE_SET)
-            .withUnit("s")
-            .withValueMin(0)
-            .withValueMax(43200)
-            .withValueStep(1)
-            .withDescription("Countdown for gang 2"),
-        e.power_on_behavior().withAccess(ea.STATE_SET),
-        e.power_on_behavior().withEndpoint("l1").withAccess(ea.STATE_SET),
-        e.power_on_behavior().withEndpoint("l2").withAccess(ea.STATE_SET),
+const STATE_DPS = [1, 2, 3];
+const COUNTDOWN_DPS = [7, 8, 9];
+const POWER_ON_BEHAVIOR_DPS = [29, 30, 31];
+const NAME_DPS = [105, 106, 107];
+
+const endpointMap = (channels) => {
+    const endpoints = {};
+    for (let channel = 1; channel <= channels; channel++) {
+        endpoints[`l${channel}`] = 1;
+    }
+    return endpoints;
+};
+
+const channelDatapoints = (channels) => {
+    const datapoints = [
+        [13, "_dp13", ignoredDatapoint],
+        [14, "power_on_behavior", tuya.valueConverter.powerOnBehaviorEnum],
+        [16, "radar_switch", tuya.valueConverter.onOff],
+        [20, "energy", tuya.valueConverter.divideBy1000],
+        [21, "current", tuya.valueConverter.divideBy1000],
+        [22, "power", tuya.valueConverter.divideBy10],
+        [23, "voltage", tuya.valueConverter.divideBy10],
+        [101, "child_lock", tuya.valueConverter.onOff],
+        [102, "backlight", tuya.valueConverter.raw],
+        [104, "radar_distance", radarDistance],
+        [111, "screen_off_time", screenOffTime],
+        [112, "_dp112", ignoredDatapoint],
+        [113, "_dp113", ignoredDatapoint],
+        [114, "_dp114", ignoredDatapoint],
+    ];
+
+    for (let channel = 1; channel <= channels; channel++) {
+        datapoints.push([STATE_DPS[channel - 1], `state_l${channel}`, tuya.valueConverter.onOff]);
+        datapoints.push([COUNTDOWN_DPS[channel - 1], `countdown_l${channel}`, tuya.valueConverter.countdown]);
+        datapoints.push([
+            POWER_ON_BEHAVIOR_DPS[channel - 1],
+            `power_on_behavior_l${channel}`,
+            tuya.valueConverter.powerOnBehaviorEnum,
+        ]);
+        datapoints.push([
+            NAME_DPS[channel - 1],
+            `switch${channel}_name`,
+            {from: screenNameConverter.from, to: null},
+        ]);
+    }
+
+    return datapoints;
+};
+
+const channelToZigbee = (channels) => {
+    const converters = [];
+    for (let channel = 1; channel <= channels; channel++) {
+        converters.push(screenNameToZigbee(`switch${channel}_name`, NAME_DPS[channel - 1]));
+    }
+    converters.push(tuya.tz.datapoints);
+    return converters;
+};
+
+const channelExposes = (channels) => {
+    const exposesList = [];
+
+    for (let channel = 1; channel <= channels; channel++) {
+        exposesList.push(e.switch().withEndpoint(`l${channel}`).setAccess("state", ea.STATE_SET));
+    }
+    for (let channel = 1; channel <= channels; channel++) {
+        exposesList.push(
+            exposes.numeric(`countdown_l${channel}`, ea.STATE_SET)
+                .withUnit("s")
+                .withValueMin(0)
+                .withValueMax(43200)
+                .withValueStep(1)
+                .withDescription(`Countdown for gang ${channel}`),
+        );
+    }
+
+    exposesList.push(e.power_on_behavior().withAccess(ea.STATE_SET));
+    for (let channel = 1; channel <= channels; channel++) {
+        exposesList.push(e.power_on_behavior().withEndpoint(`l${channel}`).withAccess(ea.STATE_SET));
+    }
+
+    exposesList.push(
         exposes.binary("radar_switch", ea.STATE_SET, "ON", "OFF")
             .withDescription("Radar switch"),
         exposes.binary("child_lock", ea.STATE_SET, "ON", "OFF")
@@ -135,15 +149,54 @@ const definition = {
             .withDescription("Radar distance"),
         exposes.enum("screen_off_time", ea.STATE_SET, ["none", "10", "20", "30", "45", "60"])
             .withDescription("Screen off time"),
-        exposes.text("switch1_name", ea.STATE_SET)
-            .withDescription("Display name for gang 1"),
-        exposes.text("switch2_name", ea.STATE_SET)
-            .withDescription("Display name for gang 2"),
-        e.energy(),
-        e.current(),
-        e.power(),
-        e.voltage(),
-    ],
+    );
+
+    for (let channel = 1; channel <= channels; channel++) {
+        exposesList.push(
+            exposes.text(`switch${channel}_name`, ea.STATE_SET)
+                .withDescription(`Display name for gang ${channel}`),
+        );
+    }
+
+    exposesList.push(e.energy(), e.current(), e.power(), e.voltage());
+    return exposesList;
 };
 
-module.exports = definition;
+const createDefinition = ({channels, fingerprints}) => ({
+    fingerprint: tuya.fingerprint("TS0601", fingerprints),
+    model: `TS0601_${channels}gang_screen_switch_o409r73p`,
+    vendor: "Zemismart",
+    description: `${channels} gang screen switch with metering`,
+    extend: [
+        tuya.modernExtend.tuyaBase({dp: true}),
+        tuya.modernExtend.tuyaWeatherForecast(),
+    ],
+    fromZigbee: [tuya.fz.datapoints, fzLocal.ignoreTuyaConfigureResponse],
+    toZigbee: channelToZigbee(channels),
+    onEvent: tuya.onEventSetTime,
+    configure: async (device, coordinatorEndpoint) => {
+        await tuya.configureMagicPacket(device, coordinatorEndpoint);
+    },
+    endpoint: () => endpointMap(channels),
+    meta: {
+        multiEndpoint: true,
+        tuyaDatapoints: channelDatapoints(channels),
+    },
+    exposes: channelExposes(channels),
+});
+
+module.exports = [
+    createDefinition({
+        channels: 2,
+        fingerprints: [
+            "_TZE284_o409r73p",
+            "_TZE28C1000000_o409r73p",
+        ],
+    }),
+    createDefinition({
+        channels: 3,
+        fingerprints: [
+            "_TZE284_oy1nuaa5",
+        ],
+    }),
+];
