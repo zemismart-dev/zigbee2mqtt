@@ -55,8 +55,9 @@ const definition = {
     fingerprint: tuya.fingerprint("TS0601", [
         "_TZE204_e1hutaaj",
         "_TZE284_e1hutaaj",
+        "_TZE284_2jnoy8dj",
     ]),
-    model: "ZN2S-RS1E-SF",
+    model: "ZN2S-RS1E",
     vendor: "Zemismart",
     description: "Zigbee touch fan controller",
     extend: [tuya.modernExtend.tuyaBase({
