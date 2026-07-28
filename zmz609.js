@@ -166,7 +166,7 @@ const createDefinition = ({channels, fingerprints}) => ({
     fingerprint: tuya.fingerprint("TS0601", fingerprints),
     model: `TS0601_${channels}gang_screen_switch_o409r73p`,
     vendor: "Zemismart",
-    description: `${channels} gang screen switch with metering`,
+    description: `${channels} gang ZMZ609 screen switch with metering`,
     extend: [
         tuya.modernExtend.tuyaBase({dp: true}),
         tuya.modernExtend.tuyaWeatherForecast(),
