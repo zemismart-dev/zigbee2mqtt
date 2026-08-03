@@ -1,9 +1,82 @@
-const fz = require('zigbee-herdsman-converters/converters/fromZigbee');
-const tz = require('zigbee-herdsman-converters/converters/toZigbee');
 const exposes = require('zigbee-herdsman-converters/lib/exposes');
 const e = exposes.presets;
 const ea = exposes.access;
 const tuya = require('zigbee-herdsman-converters/lib/tuya');
+
+const faultMap = {
+    1: "battery_alarm",
+    2: "magnetism_alarm",
+    4: "cover_alarm",
+    8: "credit_alarm",
+    16: "switch_gaps_alarm",
+    32: "meter_body_alarm",
+    64: "abnormal_water_alarm",
+    128: "arrearage_alarm",
+    256: "overflow_alarm",
+    512: "revflow_alarm",
+    1024: "over_pre_alarm",
+    2048: "empty_pip_alarm",
+    4096: "transduce_alarm",
+};
+
+const rawPeriodVolume = {
+    from: (value) => {
+        const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+        if (buffer.length !== 8) {
+            return undefined;
+        }
+        return buffer.readUInt32BE(4) / 1000;
+    },
+};
+
+const rawInstantaneousFlow = {
+    from: (value) => {
+        const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+        if (buffer.length !== 4) {
+            return undefined;
+        }
+        return buffer.readUInt32BE(0) / 1000;
+    },
+};
+
+const meterId = {
+    from: (value) => {
+        const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+        if (buffer.length === 0) {
+            return undefined;
+        }
+        const decoded = buffer.toString("ascii").replace(/\0+$/, "");
+        return decoded && /^[\x20-\x7e]+$/.test(decoded) ? decoded : undefined;
+    },
+};
+
+const faultStatus = {
+    from: (value) => {
+        const bitmap = Number(value);
+        if (!Number.isInteger(bitmap) || bitmap < 0) {
+            return "invalid";
+        }
+        if (bitmap === 0) {
+            return "OK";
+        }
+
+        const faults = [];
+        let knownBits = 0;
+        for (const [bit, name] of Object.entries(faultMap)) {
+            const numericBit = Number(bit);
+            knownBits |= numericBit;
+            if (bitmap & numericBit) {
+                faults.push(name);
+            }
+        }
+
+        const unknownBits = bitmap & ~knownBits;
+        if (unknownBits) {
+            faults.push(`unknown_bits_0x${unknownBits.toString(16).toUpperCase()}`);
+        }
+        return faults.join(", ");
+    },
+};
 
 const definition = {
     fingerprint: tuya.fingerprint("TS0601", ["_TZE200_jt50ea5d"]),
@@ -28,46 +101,11 @@ const definition = {
     meta: {
         tuyaDatapoints: [
             // DP 1 - Cumulative Flow
-            [
-                1,
-                "cumulative_flow",
-                {
-                    from: (value, meta) => {
-                        // Multiplier: 2, so divide by 100 to get m³
-                        return value / 100;
-                    },
-                },
-            ],
+            [1, "cumulative_flow", tuya.valueConverter.divideBy100],
             // DP 2 - Monthly Water Consumption
-            [
-                2,
-                "monthly_water_consumption",
-                {
-                    from: (v) => {
-                        const buf = Buffer.isBuffer(v) ? v : Buffer.from(v || []);
-                        if (buf.length >= 8) {
-                            const value = (buf.readUInt8(4) << 24) + (buf.readUInt8(5) << 16) + (buf.readUInt8(6) << 8) + buf.readUInt8(7);
-                            return value / 1000;
-                        }
-                        return 0;
-                    },
-                },
-            ],
+            [2, "monthly_water_consumption", rawPeriodVolume],
             // DP 3 - Daily Water Consumption
-            [
-                3,
-                "daily_water_consumption",
-                {
-                    from: (v) => {
-                        const buf = Buffer.isBuffer(v) ? v : Buffer.from(v || []);
-                        if (buf.length >= 8) {
-                            const value = (buf.readUInt8(4) << 24) + (buf.readUInt8(5) << 16) + (buf.readUInt8(6) << 8) + buf.readUInt8(7);
-                            return value / 1000;
-                        }
-                        return 0;
-                    },
-                },
-            ],
+            [3, "daily_water_consumption", rawPeriodVolume],
             // DP 4 - Report Period Setting
             [
                 4,
@@ -86,104 +124,21 @@ const definition = {
                 }),
             ],
             // DP 5 - Fault bitmap
-            [
-                5,
-                "fault",
-                {
-                    from: (value, meta) => {
-                        const faults = [];
-                        const faultMap = {
-                            1: "battery_alarm",
-                            2: "magnetism_alarm",
-                            4: "cover_alarm",
-                            8: "credit_alarm",
-                            16: "switch_gaps_alarm",
-                            32: "meter_body_alarm",
-                            64: "abnormal_water_alarm",
-                            128: "arrearage_alarm",
-                            256: "overflow_alarm",
-                            512: "revflow_alarm",
-                            1024: "over_pre_alarm",
-                            2048: "empty_pip_alarm",
-                            4096: "transduce_alarm",
-                        };
-
-                        if (value === 0) {
-                            return "OK";
-                        }
-
-                        for (const [bit, name] of Object.entries(faultMap)) {
-                            if (value & parseInt(bit)) {
-                                faults.push(name);
-                            }
-                        }
-                        return faults.join(", ");
-                    },
-                },
-            ],
-            // DP 6 - Prepayment Switch
-            [6, "prepayment_switch", tuya.valueConverter.onOff],
-            // DP 7 - Cumulative Heat
-            [
-                7,
-                "cumulative_heat",
-                {
-                    from: (value, meta) => {
-                        // Multiplier: 2, so divide by 100 to get kWh
-                        return value / 100;
-                    },
-                },
-            ],
+            [5, "fault", faultStatus],
+            // DP 7 - Heat metering display switch
+            [7, "prepayment_switch", tuya.valueConverter.onOff],
+            // DP 8 - Cumulative Heat
+            [8, "cumulative_heat", tuya.valueConverter.divideBy100],
             // DP 16 - Meter ID
-            [16, "meter_id", tuya.valueConverter.raw],
+            [16, "meter_id", meterId],
             // DP 19 - Instantaneous Flow Rate
-            [
-                19,
-                "instantaneous_flow_rate",
-                {
-                    from: (v) => {
-                        const buf = Buffer.isBuffer(v) ? v : Buffer.from(v || []);
-                        if (buf.length >= 4) {
-                            const value = buf.readUInt32BE(0);
-                            return value / 1000;
-                        }
-                        return 0;
-                    },
-                },
-            ],
+            [19, "instantaneous_flow_rate", rawInstantaneousFlow],
             // DP 21 - Inlet Water Temperature
-            [
-                21,
-                "inlet_water_temperature",
-                {
-                    from: (value, meta) => {
-                        // Multiplier: 2, so divide by 100 to get °C
-                        return value / 100;
-                    },
-                },
-            ],
+            [21, "inlet_water_temperature", tuya.valueConverter.divideBy100],
             // DP 22 - Outlet Water Temperature
-            [
-                22,
-                "outlet_water_temperature",
-                {
-                    from: (value, meta) => {
-                        // Multiplier: 2, so divide by 100 to get °C
-                        return value / 100;
-                    },
-                },
-            ],
+            [22, "outlet_water_temperature", tuya.valueConverter.divideBy100],
             // DP 24 - Power Supply Voltage
-            [
-                24,
-                "voltage",
-                {
-                    from: (value, meta) => {
-                        // Multiplier: 2, so divide by 100 to get V
-                        return value / 100;
-                    },
-                },
-            ],
+            [24, "voltage", tuya.valueConverter.divideBy100],
         ],
     },
     options: [
