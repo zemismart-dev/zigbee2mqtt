@@ -280,7 +280,6 @@ module.exports = [
             "_TZE284_k7v0eqke",
             "_TZE284_e4pf6l87",
             "_TZE28C1000000_e4pf6l87",
-            "_TZE284_xvywzhmi",
         ],
     }),
     createDefinition({
@@ -293,7 +292,6 @@ module.exports = [
             "_TZE284_wwaeqnrf",
             "_TZE204_xibaabmu",
             "_TZE284_xibaabmu",
-            "_TZE28C1000000_xibaabmu",
             "_TZE204_08qc13ct",
         ],
     }),
