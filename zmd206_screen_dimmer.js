@@ -2,8 +2,9 @@
  * Zemismart ZMD-206 screen dimmer family for Zigbee2MQTT.
  *
  * Evidence source: Homey live Tuya dataQuery / command-report round trips for
- * TS0601 / _TZE28C1000000_k9e7ihec. The 1- and 2-gang variants use the same
- * validated channel stride and were exercised through the same family driver.
+ * TS0601 / _TZE28C1000000_k9e7ihec. The exact _TZE284_k9e7ihec three-gang
+ * fingerprint was observed in a Zigbee2MQTT interview and uses the same family
+ * mapping; its full functional surface is not yet physically verified.
  */
 
 const zigbeeHerdsmanConverters = require("zigbee-herdsman-converters");
@@ -163,5 +164,5 @@ const definition = (channels, manufacturerNames) => {
 module.exports = [
     definition(1, ["_TZE28C1000000_5aico93l", "_TZE284_5aico93l"]),
     definition(2, ["_TZE284_pyh4zt7w"]),
-    definition(3, ["_TZE28C1000000_k9e7ihec"]),
+    definition(3, ["_TZE28C1000000_k9e7ihec", "_TZE284_k9e7ihec"]),
 ];
