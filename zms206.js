@@ -1,4 +1,5 @@
 const exposes = require("zigbee-herdsman-converters/lib/exposes");
+const modernExtend = require("zigbee-herdsman-converters/lib/modernExtend");
 const tuya = require("zigbee-herdsman-converters/lib/tuya");
 
 const e = exposes.presets;
@@ -35,6 +36,88 @@ const switchColor = tuya.valueConverterBasic.lookup({
     warm_yellow: tuya.enum(8),
 });
 
+const emptySafeLookup = (converter) => ({
+    from: (value) => {
+        if ((Buffer.isBuffer(value) || Array.isArray(value)) && Buffer.from(value).length === 0) {
+            return undefined;
+        }
+        return converter.from(value);
+    },
+    to: converter.to,
+});
+
+const delayOffSchedule = emptySafeLookup(tuya.valueConverterBasic.lookup({
+    red: tuya.enum(0),
+    blue: tuya.enum(1),
+    green: tuya.enum(2),
+    white: tuya.enum(3),
+    yellow: tuya.enum(4),
+    magenta: tuya.enum(5),
+    cyan: tuya.enum(6),
+    warm_white: tuya.enum(7),
+    warm_yellow: tuya.enum(8),
+}));
+
+const radarConfig = tuya.valueConverterBasic.lookup({
+    none: tuya.enum(0),
+    "10s": tuya.enum(1),
+    "20s": tuya.enum(2),
+    "30s": tuya.enum(3),
+    "45s": tuya.enum(4),
+    "60s": tuya.enum(5),
+});
+
+const ignoredDatapoint = {from: () => undefined, to: null};
+const lastTimeSyncByDevice = new Map();
+
+const uint32Bytes = (value) => {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32BE(value >>> 0);
+    return [...buffer];
+};
+
+const privateScreenCluster = modernExtend.deviceAddCustomCluster("manuSpecificTuyaScreen", {
+    name: "manuSpecificTuyaScreen",
+    ID: 0xe000,
+    attributes: {},
+    commands: {},
+    commandsResponse: {
+        unknownD0: {name: "unknownD0", ID: 0xd0, parameters: []},
+        unknownD2: {name: "unknownD2", ID: 0xd2, parameters: []},
+    },
+});
+
+const fzLocal = {
+    throttledMcuSyncTime: {
+        cluster: "manuSpecificTuya",
+        type: ["commandMcuSyncTime"],
+        convert: (model, msg) => {
+            const now = Date.now();
+            const ieeeAddr = msg.device.ieeeAddr;
+            const lastTimeSync = lastTimeSyncByDevice.get(ieeeAddr) || 0;
+
+            if (now - lastTimeSync < 55000) {
+                return undefined;
+            }
+
+            lastTimeSyncByDevice.set(ieeeAddr, now);
+            const utcTime = Math.round(now / 1000);
+            const localTime = utcTime - new Date().getTimezoneOffset() * 60;
+            msg.endpoint.command("manuSpecificTuya", "mcuSyncTime", {
+                payloadSize: 8,
+                payload: [...uint32Bytes(utcTime), ...uint32Bytes(localTime)],
+            }, {}).catch(() => undefined);
+
+            return undefined;
+        },
+    },
+    ignorePrivateClusterStatus: {
+        cluster: "manuSpecificTuyaScreen",
+        type: ["commandUnknownD0", "commandUnknownD2"],
+        convert: () => undefined,
+    },
+};
+
 const rawStringConverter = {
     from: (value) => {
         const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
@@ -67,7 +150,7 @@ const screenNameToZigbee = (property, dp) => ({
     },
 });
 
-const fzLocal = {
+Object.assign(fzLocal, {
     datapoints: {
         ...tuya.fz.datapoints,
         convert: (model, msg, publish, options, meta) => {
@@ -89,7 +172,7 @@ const fzLocal = {
         type: ["raw"],
         convert: () => undefined,
     },
-};
+});
 
 const endpointMap = (channels) => {
     const endpoints = {};
@@ -150,12 +233,15 @@ const tuyaDatapoints = (channels) => {
         [14, "relay_status", tuya.valueConverter.raw],
         [15, "indicator_status", indicatorStatus],
         [16, "backlight_mode", tuya.valueConverter.onOff],
+        [19, "delay_off_schedule", delayOffSchedule],
         [24, "test_bit", tuya.valueConverter.raw],
         [101, "child_lock", tuya.valueConverter.lockUnlock],
         [102, "backlight_brightness", tuya.valueConverter.raw],
         [103, "switch_color_off", switchColor],
         [104, "switch_color_on", switchColor],
-        [201, "cycle_schedule", rawStringConverter],
+        [111, "radar_config", radarConfig],
+        [channels === 4 ? 201 : 209, "cycle_schedule", rawStringConverter],
+        [210, "_dp210", ignoredDatapoint],
     ];
     for (let channel = 1; channel <= channels; channel++) {
         result.push([STATE_DPS[channel - 1], `state_l${channel}`, tuya.valueConverter.onOff]);
@@ -206,6 +292,19 @@ const COMMON_EXPOSES = [
     ]).withDescription("Indicator color when off"),
     exposes.enum("indicator_status", ea.STATE_SET, ["off", "on_off_status", "switch_position"])
         .withDescription("Indicator mode"),
+    exposes.enum("delay_off_schedule", ea.STATE_SET, [
+        "red",
+        "blue",
+        "green",
+        "white",
+        "yellow",
+        "magenta",
+        "cyan",
+        "warm_white",
+        "warm_yellow",
+    ]).withDescription("Indicator color while delayed"),
+    exposes.enum("radar_config", ea.STATE_SET, ["none", "10s", "20s", "30s", "45s", "60s"])
+        .withDescription("Radar config"),
     exposes.text("cycle_schedule", ea.STATE_SET)
         .withDescription("Cycle schedule"),
 ];
@@ -223,8 +322,13 @@ const createDefinition = ({channels, fingerprints}) => ({
     model: `TS0601_${channels}gang_screen_switch_zms206`,
     vendor: "Zemismart",
     description: `${channels} gang Zemismart ZMS206 screen switch`,
-    extend: [tuya.modernExtend.tuyaBase({dp: true, timeStart: "1970"})],
-    fromZigbee: [fzLocal.datapoints, fzLocal.ignoreTuyaConfigureResponse],
+    extend: [tuya.modernExtend.tuyaBase({dp: true, timeStart: "off"}), privateScreenCluster],
+    fromZigbee: [
+        fzLocal.throttledMcuSyncTime,
+        fzLocal.ignorePrivateClusterStatus,
+        fzLocal.datapoints,
+        fzLocal.ignoreTuyaConfigureResponse,
+    ],
     toZigbee: [
         ...nameConverters(channels),
         tuya.tz.datapoints,
@@ -257,6 +361,7 @@ module.exports = [
             "_TZE284_lnyz4a6v",
             "_TZE284_1tnysxwl",
             "_TZE284_sa2ueffe",
+            "_TZE284_rzdkn5rx",
         ],
     }),
     createDefinition({
@@ -292,6 +397,7 @@ module.exports = [
             "_TZE284_wwaeqnrf",
             "_TZE204_xibaabmu",
             "_TZE284_xibaabmu",
+            "_TZE28C1000000_xibaabmu",
             "_TZE204_08qc13ct",
         ],
     }),
