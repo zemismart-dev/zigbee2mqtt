@@ -4,10 +4,76 @@
 // Zemismart ZMS-208US-3.
 
 const exposes = require("zigbee-herdsman-converters/lib/exposes");
+const modernExtend = require("zigbee-herdsman-converters/lib/modernExtend");
 const tuya = require("zigbee-herdsman-converters/lib/tuya");
 
 const e = exposes.presets;
 const ea = exposes.access;
+const lastTimeSyncByDevice = new Map();
+
+const uint32Bytes = (value) => {
+    const buffer = Buffer.alloc(4);
+    buffer.writeUInt32BE(value >>> 0);
+    return [...buffer];
+};
+
+const privateScreenCluster = modernExtend.deviceAddCustomCluster("manuSpecificTuyaScreen", {
+    name: "manuSpecificTuyaScreen",
+    ID: 0xe000,
+    attributes: {},
+    commands: {},
+    commandsResponse: {
+        unknownD0: {name: "unknownD0", ID: 0xd0, parameters: []},
+        unknownD2: {name: "unknownD2", ID: 0xd2, parameters: []},
+    },
+});
+
+const fzLocal = {
+    throttledMcuSyncTime: {
+        cluster: "manuSpecificTuya",
+        type: ["commandMcuSyncTime"],
+        convert: (model, msg) => {
+            const now = Date.now();
+            const ieeeAddr = msg.device.ieeeAddr;
+            const lastTimeSync = lastTimeSyncByDevice.get(ieeeAddr) || 0;
+
+            if (now - lastTimeSync < 55000) {
+                return undefined;
+            }
+
+            lastTimeSyncByDevice.set(ieeeAddr, now);
+            const utcTime = Math.round(now / 1000);
+            const localTime = utcTime - new Date().getTimezoneOffset() * 60;
+            msg.endpoint.command("manuSpecificTuya", "mcuSyncTime", {
+                payloadSize: 8,
+                payload: [...uint32Bytes(utcTime), ...uint32Bytes(localTime)],
+            }, {}).catch(() => undefined);
+
+            return undefined;
+        },
+    },
+    ignorePrivateClusterStatus: {
+        cluster: "manuSpecificTuyaScreen",
+        type: ["commandUnknownD0", "commandUnknownD2"],
+        convert: () => undefined,
+    },
+    datapoints: {
+        ...tuya.fz.datapoints,
+        convert: (model, msg, publish, options, meta) => {
+            const result = tuya.fz.datapoints.convert(model, msg, publish, options, meta);
+            if (!result || typeof result !== "object") {
+                return result;
+            }
+
+            return Object.entries(result).some(([key, value]) => meta.state?.[key] !== value) ? result : undefined;
+        },
+    },
+    ignoreTuyaConfigureResponse: {
+        cluster: 0xe000,
+        type: ["raw"],
+        convert: () => undefined,
+    },
+};
 
 const name = {
     to: (value) => {
@@ -28,7 +94,14 @@ const definition = {
     model: "ZMS-208US-3",
     vendor: "Zemismart",
     description: "Smart screen switch 3 gang",
-    extend: [tuya.modernExtend.tuyaBase({dp: true})],
+    extend: [tuya.modernExtend.tuyaBase({timeStart: "off", queryOnConfigure: true}), privateScreenCluster],
+    fromZigbee: [
+        fzLocal.throttledMcuSyncTime,
+        fzLocal.ignorePrivateClusterStatus,
+        fzLocal.datapoints,
+        fzLocal.ignoreTuyaConfigureResponse,
+    ],
+    toZigbee: [tuya.tz.datapoints],
     exposes: [
         e.switch(),
         e.switch().withEndpoint("l1"),

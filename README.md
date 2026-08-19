@@ -7,7 +7,7 @@
 | `214c.js` | `TS0601` | `_TZE284_vuwtqx0t`, `_TZE200_vuwtqx0t` | 超声波水表阀，支持累计/日/月用水、阀门和告警等 DP |
 | `DN15-223F.js` | `TS0601` | `_TZE200_jt50ea5d` | DN15-223F 超声波热/冷表，支持 DP7 热量计量开关、DP8 累计热量、水量、温度、电压和周期上报 |
 | `KES-606-composite.js` | `TS0726` | `_TZ3000_ovbvmhiq`, `_TZ3000_icoxotza`, `_TZ3000_cziew6eu`, `_TZ3000_hurauima` | KES 606 复合场景开关 1/2/3/4 路，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
-| `ZMD-208.js` | `TS0601` | 1 路: `_TZE28C1000000_huc4fueh`<br>2 路: `_TZE28C1000000_gheewd2t`<br>3 路: `_TZE28C1000000_8jwv5lbl`, `_TZE284_8jwv5lbl` | ZMD-208 屏显调光开关，支持 1/2/3 路开关与亮度、最小/最大亮度、负载类型、倒计时、屏显名称、背光、颜色、童锁和息屏时间；带重复 DP 发布、MCU 时间同步及 `0xE000` raw 降噪，1/2 路 DP 映射待实机验证 |
+| `ZMD-208.js` | `TS0601` | 1 路: `_TZE28C1000000_huc4fueh`<br>2 路: `_TZE28C1000000_gheewd2t`<br>3 路: `_TZE28C1000000_8jwv5lbl`, `_TZE284_8jwv5lbl` | ZMD-208 屏显调光开关，支持 1/2/3 路开关与亮度、最小/最大亮度、负载类型、倒计时、屏显名称、背光、颜色、童锁和息屏时间；带重复 DP 去重、MCU 时间同步节流及 `0xE000` 私有状态应答，1/2 路 DP 映射待实机验证 |
 | `ZN2S-RS1E.js` | `TS0601` | `_TZE204_e1hutaaj`, `_TZE284_e1hutaaj`, `_TZE284_2jnoy8dj` | ZN2S-RS1E 触摸风扇控制器，支持开关、风速、倒计时、上电行为、指示灯、背光、童锁、最低风速和风扇开关状态指示灯颜色 |
 | `ZN2S-L01E-SMB.js` | `TS0601` | `_TZE200_ephrk8to`, `_TZE200_ahyyfhqk`, `_TZE200_zuphzsmo`, `_TZE200_6si1pnia` | Zemismart 1/2/3/4 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `zemismart_zm16b.js` | `TS0601` | `_TZE284_3mzb0sdz` | ZM16B 电池管状窗帘电机，支持开关停、位置、电机方向、上下限设置和电量；配置、设备上线和每 12 小时主动查询 DP，避免电量长时间为空 |
@@ -16,7 +16,7 @@
 | `zemismart_zmr4.js` | `TS0044` | `_TZ3000_xwuveizv` | ZMR4 四键无线遥控器，支持每键单击、双击、长按动作、电池/电压及 12 个本地动作模拟按钮；精确指纹优先于上游定义 |
 | `zm25z.js` | `TS0301` | `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
 | `zmd206_screen_dimmer.js` | `TS0601` | 1 路: `_TZE28C1000000_5aico93l`, `_TZE284_5aico93l`<br>2 路: `_TZE284_pyh4zt7w`<br>3 路: `_TZE28C1000000_k9e7ihec`, `_TZE284_k9e7ihec` | ZMD-206 屏显调光开关，支持每路开关/亮度、亮度上下限、负载类型、倒计时、屏显名称、上电行为、背光、指示灯、童锁和渐变速度 |
-| `zm208.js` | `TS0601` | 3 路: `_TZE284_xvywzhmi`, `_TZE28C1000000_xvywzhmi` | ZMS-208US-3 非调光屏显开关，支持每路开关、倒计时、屏显名称和童锁 |
+| `zm208.js` | `TS0601` | 3 路: `_TZE284_xvywzhmi`, `_TZE28C1000000_xvywzhmi` | ZMS-208US-3 非调光屏显开关，支持每路开关、倒计时、屏显名称和童锁；带重复 DP 去重、MCU 时间同步节流及 `0xE000` 私有状态应答 |
 | `zms206.js` | `TS0601` | 1 路: `_TZE204_lnyz4a6v`, `_TZE204_sa2ueffe`, `_TZE204_zuepxzck`, `_TZE28C1000000_lnyz4a6v`, `_TZE284_lnyz4a6v`, `_TZE284_1tnysxwl`, `_TZE284_sa2ueffe`, `_TZE284_rzdkn5rx`<br>2 路: `_TZE204_3ctwoaip`, `_TZE204_dmckrsxg`, `_TZE28C1000000_dmckrsxg`, `_TZE284_3ctwoaip`, `_TZE284_dmckrsxg`, `_TZE284_a2teqi5u`, `_TZE28C1000000_a2teqi5u`<br>3 路: `_TZE204_e4pf6l87`, `_TZE204_k7v0eqke`, `_TZE204_iyki9kjp`, `_TZE284_k7v0eqke`, `_TZE284_e4pf6l87`, `_TZE28C1000000_e4pf6l87`<br>4 路: `_TZE204_y4jqpry8`, `_TZE284_y4jqpry8`, `_TZE28C1000000_y4jqpry8`, `_TZE204_wwaeqnrf`, `_TZE284_wwaeqnrf`, `_TZE204_xibaabmu`, `_TZE284_xibaabmu`, `_TZE28C1000000_xibaabmu`, `_TZE204_08qc13ct` | ZMS206 屏显开关，支持每路开关、屏显名称、倒计时、继电器上电状态、背光、童锁、指示灯颜色和循环计划；带 MCU 时间同步节流及 `0xE000` 私有状态应答 |
 | `zmz609.js` | `TS0601` | 2 路: `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p`<br>3 路: `_TZE284_oy1nuaa5` | ZMZ609 美标屏显开关，支持两路/三路开关、计量、屏显和配置项 |
 

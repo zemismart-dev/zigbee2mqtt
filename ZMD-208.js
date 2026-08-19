@@ -1,5 +1,6 @@
 const zigbeeHerdsmanConverters = require("zigbee-herdsman-converters");
 const exposes = zigbeeHerdsmanConverters.exposes || require("zigbee-herdsman-converters/lib/exposes");
+const modernExtend = require("zigbee-herdsman-converters/lib/modernExtend");
 const tuya = require("zigbee-herdsman-converters/lib/tuya");
 
 const e = exposes.presets;
@@ -38,7 +39,19 @@ const relayStatus = enumLookup(["off", "on", "memory"]);
 const indicatorStatus = enumLookup(["none", "relay", "pos"]);
 const colorIndex = enumLookup(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 const screenOffTime = enumLookup(["none", "10", "20", "30", "45", "60"]);
+const ignoredDatapoint = {from: () => undefined, to: null};
 const lastTimeSyncByDevice = new Map();
+
+const privateScreenCluster = modernExtend.deviceAddCustomCluster("manuSpecificTuyaScreen", {
+    name: "manuSpecificTuyaScreen",
+    ID: 0xe000,
+    attributes: {},
+    commands: {},
+    commandsResponse: {
+        unknownD0: {name: "unknownD0", ID: 0xd0, parameters: []},
+        unknownD2: {name: "unknownD2", ID: 0xd2, parameters: []},
+    },
+});
 
 const uint32Bytes = (value) => {
     const buffer = Buffer.alloc(4);
@@ -77,6 +90,11 @@ const fzLocal = {
 
             return undefined;
         },
+    },
+    ignorePrivateClusterStatus: {
+        cluster: "manuSpecificTuyaScreen",
+        type: ["commandUnknownD0", "commandUnknownD2"],
+        convert: () => undefined,
     },
     datapoints: {
         ...tuya.fz.datapoints,
@@ -145,13 +163,20 @@ const buildDefinition = (gangs, productId, manufacturerNames) => {
         model: `ZT3L_${gangs}gang_screen_dimmer_${productId}`,
         vendor: "Zemismart",
         description: `${gangs} gang screen dimmer switch`,
-        fromZigbee: [fzLocal.throttledMcuSyncTime, fzLocal.datapoints, fzLocal.ignoreTuyaConfigureResponse],
+        extend: [privateScreenCluster],
+        fromZigbee: [
+            fzLocal.throttledMcuSyncTime,
+            fzLocal.ignorePrivateClusterStatus,
+            fzLocal.datapoints,
+            fzLocal.ignoreTuyaConfigureResponse,
+        ],
         toZigbee: [
             ...gangNumbers.map((gang) => nameSet(105 + gang, `switch${gang}_name`)),
             tuya.tz.datapoints,
         ],
         configure: async (device, coordinatorEndpoint) => {
             await tuya.configureMagicPacket(device, coordinatorEndpoint);
+            await tuya.configureQuery(device, coordinatorEndpoint);
         },
         endpoint: () => Object.fromEntries(gangNumbers.map((gang) => [`l${gang}`, 1])),
         exposes: [
@@ -195,6 +220,10 @@ const buildDefinition = (gangs, productId, manufacturerNames) => {
                 [105, "gradient_rate", tuya.valueConverter.raw],
                 [110, "screen_off_time", screenOffTime],
                 ...gangNumbers.map((gang) => [105 + gang, `switch${gang}_name`, {from: rawText.from, to: null}]),
+                // Returned by dataQuery on the 8jwv5lbl hardware, but their function is undocumented.
+                [200, null, ignoredDatapoint],
+                [201, null, ignoredDatapoint],
+                [202, null, ignoredDatapoint],
             ],
         },
     };
