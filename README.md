@@ -11,6 +11,7 @@
 | `ZN2S-RS1E.js` | `TS0601` | `_TZE204_e1hutaaj`, `_TZE284_e1hutaaj`, `_TZE284_2jnoy8dj` | ZN2S-RS1E 触摸风扇控制器，支持开关、风速、倒计时、上电行为、指示灯、背光、童锁、最低风速和风扇开关状态指示灯颜色 |
 | `ZN2S-L01E-SMB.js` | `TS0601` | `_TZE200_ephrk8to`, `_TZE200_ahyyfhqk`, `_TZE200_zuphzsmo`, `_TZE200_6si1pnia` | Zemismart 1/2/3/4 路场景开关，支持每路在开关模式和场景模式之间切换 |
 | `zemismart_zm16b.js` | `TS0601` | `_TZE284_3mzb0sdz` | ZM16B 电池管状窗帘电机，支持开关停、位置、电机方向、上下限设置和电量；配置、设备上线和每 12 小时主动查询 DP，避免电量长时间为空 |
+| `zemismart_zm86_2z.js` | `TS0601` | `_TZE200_cf1sl3tj` | ZM86-2Z 罗马杆 I/U 型窗帘电机，外部转换器精确指纹优先匹配；支持开关停、DP2 位置、电机方向、限位、点动、电量和故障状态，并将语义未确认的 DP3 保留为只读诊断值，避免覆盖位置和运行状态 |
 | `zemismart-zpm1-z2m.js` | `TS0601` | `_TZE284_6hrnp30w` | ZMP1 电池窗帘电机，支持开关停、位置、方向、限位和每 12 小时通过 Tuya dataQuery 主动读取电量 |
 | `zemismart-zps-z1-z2m.js` | `TS0601` | 未限制 manufacturerName | ZPS-Z1 24 GHz 毫米波人体存在传感器 |
 | `zemismart_zmr4.js` | `TS0044` | `_TZ3000_xwuveizv` | ZMR4 四键无线遥控器，支持每键单击、双击、长按动作、电池/电压及 12 个本地动作模拟按钮；精确指纹优先于上游定义 |
