@@ -16,10 +16,26 @@
 | `zemismart-zps-z1-z2m.js` | `TS0601` | 未限制 manufacturerName | ZPS-Z1 24 GHz 毫米波人体存在传感器 |
 | `zemismart_zmr4.js` | `TS0044` | `_TZ3000_xwuveizv` | ZMR4 四键无线遥控器，支持每键单击、双击、长按动作、电池/电压及 12 个本地动作模拟按钮；精确指纹优先于上游定义 |
 | `zm25z.js` | `TS0301` | `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
+| `zms1.js` | `TS0601` | `_TZE284_zuq5xxib`, `_TZE200_fu14oapz` | ZMS1-TYZ 窗帘电机，支持开关停、整数百分比及运行指示；284 版本另提供方向和原始速度设置，fu14oapz 版本另提供 DP7/DP12 原始诊断。实测范围与限制见下文 |
 | `zmd206_screen_dimmer.js` | `TS0601` | 1 路: `_TZE28C1000000_5aico93l`, `_TZE284_5aico93l`<br>2 路: `_TZE284_pyh4zt7w`<br>3 路: `_TZE28C1000000_k9e7ihec`, `_TZE284_k9e7ihec` | ZMD-206 屏显调光开关，支持每路开关/亮度、亮度上下限、负载类型、倒计时、屏显名称、上电行为、背光、指示灯、童锁和渐变速度 |
 | `zm208.js` | `TS0601` | 3 路: `_TZE284_xvywzhmi`, `_TZE28C1000000_xvywzhmi` | ZMS-208US-3 非调光屏显开关，支持每路开关、倒计时、屏显名称和童锁；带重复 DP 去重、MCU 时间同步节流及 `0xE000` 私有状态应答 |
 | `zms206.js` | `TS0601` | 1 路: `_TZE204_lnyz4a6v`, `_TZE204_sa2ueffe`, `_TZE204_zuepxzck`, `_TZE28C1000000_lnyz4a6v`, `_TZE284_lnyz4a6v`, `_TZE284_1tnysxwl`, `_TZE284_sa2ueffe`, `_TZE284_rzdkn5rx`<br>2 路: `_TZE204_3ctwoaip`, `_TZE204_dmckrsxg`, `_TZE28C1000000_dmckrsxg`, `_TZE284_3ctwoaip`, `_TZE284_dmckrsxg`, `_TZE284_a2teqi5u`, `_TZE28C1000000_a2teqi5u`<br>3 路: `_TZE204_e4pf6l87`, `_TZE204_k7v0eqke`, `_TZE204_iyki9kjp`, `_TZE284_k7v0eqke`, `_TZE284_e4pf6l87`, `_TZE28C1000000_e4pf6l87`<br>4 路: `_TZE204_y4jqpry8`, `_TZE284_y4jqpry8`, `_TZE28C1000000_y4jqpry8`, `by _TZE28C1000000_y4jqpry8`, `_TZE204_wwaeqnrf`, `_TZE284_wwaeqnrf`, `_TZE204_xibaabmu`, `_TZE284_xibaabmu`, `_TZE28C1000000_xibaabmu`, `_TZE204_08qc13ct` | ZMS206 屏显开关，支持每路开关、屏显名称、倒计时、继电器上电状态、背光、童锁、指示灯颜色和循环计划；带 MCU 时间同步节流及 `0xE000` 私有状态应答 |
 | `zmz609.js` | `ZMZ609-2`, `ZMZ609-3` | 2 路: `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p`<br>3 路: `_TZE284_oy1nuaa5` | ZMZ609 美标屏显开关，支持两路/三路开关、计量、屏显和配置项；自动同步日期、当前天气和三天天气预报，无需 Home Assistant 自动化，可自动定位或配置经纬度 |
+
+## ZMS1-TYZ 功能与验证范围
+
+将 `zms1.js` 添加到 Zigbee2MQTT 的外部转换器中。两种指纹分别匹配，功能不会混用：
+
+| 指纹 | 功能 | 验证情况 |
+| --- | --- | --- |
+| `TS0601 / _TZE284_zuq5xxib` | 开、关、停止；0–100 整数百分比；`invert_cover`；`running`；`options.reverse_direction`；`options.motor_speed`（原始值 0–255） | 已在 Z2M 加载并选中；开/关各运行约 3 秒后停止，经现场确认输出轴反向转动并正常停止。无轨道，实际行程和百分比未验证；方向设置和调速未实测 |
+| `TS0601 / _TZE200_fu14oapz` | 开、关、停止；0–100 整数百分比；`invert_cover`；`running`；`work_state_raw`（DP7）和 `fault_raw`（DP12） | 按已合并的上游 PR #13208 适配；仅完成源码、指纹选择和模拟协议测试，未进行该指纹实机测试。不提供方向和调速入口 |
+
+`running` 由位置上报推断，缺少持续上报时会在约 3 秒后复位，不是独立运动传感器。`work_state_raw` 和 `fault_raw` 保留 datatype 与十六进制字节；枚举及故障位含义尚未确认，不能把原始值当作已解释的故障状态。方向和速度只在收到对应设备回报后更新显示，不把下发成功当作状态回读。校准、限位和点动不在本配置范围内。
+
+位置输入严格限定为数值整数 0–100；空值、布尔值、字符串、小数和越界值均拒绝，避免上游 legacy 类型转换导致误动作。已通过 zigbee-herdsman-converters 26.105.0 和 26.109.0 的定向测试；运行 `node tests/test_zms1.cjs` 需先在模块搜索路径中提供该依赖。
+
+来源：[ZMS1-TYZ 上游功能](https://www.zigbee2mqtt.io/devices/ZMS1-TYZ.html)、[原始 ZMS1 支持 PR #9235](https://github.com/Koenkk/zigbee-herdsman-converters/pull/9235)、[fu14oapz 支持 PR #13208](https://github.com/Koenkk/zigbee-herdsman-converters/pull/13208)。方向/速度在 284 版本上属于依据 204 同族实现提供的待验证功能。仓库发布不代表所有功能已完成实机验收。
 
 ## ZM16B 电量说明
 
