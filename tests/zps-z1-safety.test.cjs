@@ -9,10 +9,10 @@ const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve()
 
 function harness() {
     let now = 1000, sequence = 0;
-    const timers = new Map(), commands = [], states = [];
+    const timers = new Map(), commands = [], states = [], warnings = [];
     const raw = new Map([
         [1, [4, Buffer.from([1])]], [2, [2, Buffer.from([0, 0, 0, 0])]],
-        [101, [2, Buffer.from([0, 0, 0, 42])]], [104, [1, Buffer.from([0])]],
+        [101, [2, Buffer.from([0, 0, 0, 42])]],
         [112, [4, Buffer.from([1])]], [117, [0, Buffer.from([2, 0, 1, 2, 1, 0, 2, 1, 1, 2])]],
         [119, [2, Buffer.from([0, 0, 0, 15])]], [123, [1, Buffer.from([1])]],
         [124, [0, Buffer.from(Array.from({length: 20}, (_, i) => i * 7 + 3))]],
@@ -21,7 +21,7 @@ function harness() {
     const store = {getValue: (entity, key, fallback) => stored.get(`${entity}/${key}`) ?? fallback,
         putValue: (entity, key, value) => stored.set(`${entity}/${key}`, value)};
     const sandbox = {module: {exports: {}}, Buffer,
-        require: id => id.endsWith('/logger') ? {logger: {warning() {}, debug() {}}} : id.endsWith('/store') ? store : require(id),
+        require: id => id.endsWith('/logger') ? {logger: {warning(message) {warnings.push(message);}, debug() {}}} : id.endsWith('/store') ? store : require(id),
         Date: class extends Date { static now() { return now; } },
         setTimeout: (fn, delay) => {
             const id = {id: ++sequence, unref() {}};
@@ -30,7 +30,7 @@ function harness() {
         clearTimeout: id => timers.delete(id),
     };
     vm.runInNewContext(source, sandbox, {filename: 'zemismart-zps-z1-z2m.js'});
-    const definition = sandbox.module.exports;
+    let definition = sandbox.module.exports;
     let hook;
     const device = {ieeeAddr: '0x0000000000000001', getEndpoint: () => endpoint};
     const meta = {device, state: {}};
@@ -46,6 +46,7 @@ function harness() {
             for (const [dp, [datatype, data]] of raw) report(dp, datatype, data);
         } else if (command === 'dataRequest') {
             for (const entry of payload.dpValues) {
+                if (entry.dp === 104) continue; // Write-only: ACK without fabricating a state report.
                 raw.set(entry.dp, [entry.datatype, Buffer.from(entry.data)]);
                 report(entry.dp, entry.datatype, Buffer.from(entry.data));
             }
@@ -62,14 +63,17 @@ function harness() {
         }
         return promise;
     }
-    const api = {definition, device, meta, commands, states, raw, timers, report,
+    const api = {get definition() { return definition; }, device, meta, commands, states, raw, timers, report, warnings,
         setHook: value => { hook = value; },
         set: (key, value) => driveQueryDelays(definition.toZigbee[0].convertSet(endpoint, key, value, meta)),
         setWithoutDrivingClock: (key, value) => definition.toZigbee[0].convertSet(endpoint, key, value, meta),
         get: key => definition.toZigbee[0].convertGet(endpoint, key, meta),
         writes: () => commands.filter(x => x.command === 'dataRequest').flatMap(x => x.payload.dpValues),
         stop: () => definition.onEvent({type: 'stop', data: {ieeeAddr: device.ieeeAddr}}),
-        reload: () => vm.runInNewContext(source, {...sandbox, module: {exports: {}}}),
+        reload: () => {
+            const next = {...sandbox, module: {exports: {}}};
+            vm.runInNewContext(source, next); definition = next.module.exports; return definition;
+        },
         tick: async ms => {
             const end = now + ms;
             await flush();
@@ -107,7 +111,87 @@ test('energy and thresholds use raw bytes with no lossy percent round trip', () 
     assert.equal(h.report(124, 0, data).zone_10_presence_threshold, 19);
 });
 
-test('invalid SET input and unverified detection-range writes send nothing', async () => {
+test('sensor_close preserves the last occupancy rather than inventing an absence reading', () => {
+    const h = harness(); h.report(1, 4, Buffer.from([1]));
+    assert.deepEqual(h.report(1, 4, Buffer.from([2])), {presence_state: 'sensor_close'});
+    assert.equal(h.meta.state.occupancy, true);
+    assert.deepEqual(h.report(106, 4, Buffer.from([0])), {});
+    assert.deepEqual(h.report(107, 1, Buffer.from([0])), {});
+});
+
+test('write-only energy commands accept legacy booleans but never query or publish a state', async () => {
+    const h = harness();
+    await assert.rejects(h.get('energy_streaming'), /write-only/);
+    assert.equal(h.commands.length, 0);
+    await h.set('energy_streaming', 'ON'); await h.tick(5000);
+    await h.set('energy_streaming', false);
+    await h.set('energy_streaming', true); await h.set('energy_streaming', 'OFF');
+    assert.equal(h.commands.filter(x => x.command === 'dataQuery').length, 0);
+    assert.equal(h.meta.state.energy_streaming, undefined);
+    assert.deepEqual(h.report(104, 1, Buffer.from([1])), {});
+    assert.deepEqual(h.report(104, 1, Buffer.from([0])), {});
+    assert.equal(h.meta.state.energy_streaming, undefined);
+    await h.stop();
+});
+
+test('documented distance values use exact four-byte payloads and confirmed readback', async () => {
+    const h = harness();
+    for (const value of [0, 50, 1500]) {
+        assert.equal(await h.set('detection_range', value), undefined);
+        const expected = Buffer.alloc(4); expected.writeUInt32BE(value);
+        assert.deepEqual(h.writes().at(-1), {dp: 2, datatype: 2, data: [...expected]});
+        assert.equal(h.meta.state.detection_range, value);
+    }
+});
+
+test('an unconfirmed distance write rejects without inventing the requested value', async () => {
+    const h = harness(); h.setHook(command => command === 'dataRequest' ? false : undefined);
+    const pending = assert.rejects(h.set('detection_range', 50), /No confirmed DP2/);
+    await h.tick(10000); await pending;
+    assert.equal(h.meta.state.detection_range, 0);
+});
+
+test('stop waits for an initial ON before the final safety OFF', async () => {
+    const h = harness(); let release;
+    h.setHook((command, payload) => command === 'dataRequest' && payload.dpValues[0].data[0] === 1 && !release ?
+        new Promise(resolve => {release = resolve;}) : undefined);
+    const on = h.set('energy_streaming', true); await flush();
+    const stop = h.stop(); await flush();
+    assert.deepEqual(h.writes().map(x => x.data), [[1]]);
+    release(false); await on; await stop;
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
+    await h.tick(600000); assert.equal(h.writes().length, 2);
+});
+
+test('reload cleanup cannot turn off a newer session, including consecutive replacements', async () => {
+    const h = harness(); let release;
+    h.setHook((command, payload) => command === 'dataRequest' && payload.dpValues[0].data[0] === 1 && !release ?
+        new Promise(resolve => {release = resolve;}) : undefined);
+    const on = h.set('energy_streaming', true); await flush();
+    h.reload(); h.reload();
+    const newOn = h.set('energy_streaming', true); await flush();
+    assert.deepEqual(h.writes().map(x => x.data), [[1]]);
+    release(false); await on; await newOn;
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0], [1]]);
+    assert.deepEqual(h.report(104, 1, Buffer.from([0])), {});
+    await h.tick(5000);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0], [1], [1]]);
+    await h.stop();
+    assert.deepEqual(h.writes().at(-1).data, [0]);
+});
+
+test('inactive shutdown is silent; active shutdown failure clears timers and reports the failure', async () => {
+    const idle = harness(); await idle.get('led_indicator');
+    const count = idle.commands.length; await idle.stop(); idle.reload(); await flush();
+    assert.equal(idle.commands.length, count);
+    const active = harness(); await active.set('energy_streaming', true);
+    active.setHook(() => {throw Error('offline');});
+    await active.stop();
+    assert.equal(active.timers.size, 0);
+    assert(active.warnings.some(x => x.includes('shutdown OFF failed')));
+});
+
+test('invalid SET input and invalid protocol distance values send nothing', async () => {
     const h = harness();
     for (const value of [null, undefined, '', '  ', '15', true, false, [], {}, NaN, Infinity, 1.5, -1, 61]) {
         await assert.rejects(h.set('presence_clear_cooldown', value));
@@ -118,7 +202,7 @@ test('invalid SET input and unverified detection-range writes send nothing', asy
     for (const key of ['sensitivity_preset', 'auto_calibration']) {
         for (const value of [null, true, '__proto__', 'constructor', 'toString']) await assert.rejects(h.set(key, value));
     }
-    for (const value of [null, false, 0, 50, 500]) await assert.rejects(h.set('detection_range', value), /read-only/);
+    for (const value of [null, false, '50', NaN, Infinity, -50, 1, 49, 50.5, 1501, 1550]) await assert.rejects(h.set('detection_range', value), /integer/);
     for (const value of [null, 1.5, -1, 256, '20']) await assert.rejects(h.set('zone_1_motion_threshold', value));
     assert.equal(h.commands.length, 0);
 });
@@ -157,10 +241,10 @@ test('SET readback is not suppressed by a recent GET', async () => {
     assert(times[1] - times[0] >= 3000);
 });
 
-test('hot replacement cancels old timers without issuing device commands', async () => {
+test('hot replacement explicitly stops an active energy session and leaves no timers', async () => {
     const h = harness(); await h.set('energy_streaming', true);
-    const count = h.commands.length; h.reload(); await h.tick(600000);
-    assert.equal(h.commands.length, count);
+    h.reload(); await h.tick(600000);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
     assert.equal(h.timers.size, 0);
 });
 
@@ -212,7 +296,8 @@ test('concurrent threshold edits preserve all untouched raw bytes and both edits
     expected[1] = 254; expected[16] = 1;
     assert.deepEqual([...h.raw.get(124)[1]], expected);
     assert.equal(h.writes().filter(x => x.dp === 124).length, 2);
-    assert.deepEqual(h.writes().filter(x => x.dp === 112).map(x => x.data), [[3], [3]]);
+    assert.deepEqual(h.writes().filter(x => x.dp === 112), []);
+    assert.equal(h.raw.get(112)[1][0], 1); // Preserve the existing preset.
 });
 
 test('missing or malformed full report times out without any settings write', async () => {
@@ -273,7 +358,7 @@ test('stop after snapshot arrival but before query ACK prevents the pending sett
         return new Promise(resolve => { release = resolve; });
     });
     const pending = assert.rejects(h.set('zone_1_active', false), /Device stopped/);
-    await flush(); await h.stop(); release(false); await pending;
+    await flush(); const stopping = h.stop(); release(false); await pending; await stopping;
     assert.equal(h.writes().length, 0);
 });
 
@@ -289,7 +374,8 @@ test('five minute deadline sends OFF and leaves no heartbeat loop', async () => 
     const h = harness(); await h.set('energy_streaming', true);
     await h.tick(300000);
     assert.deepEqual(h.writes().at(-1), {dp: 104, datatype: 1, data: [0]});
-    assert.equal(h.meta.state.energy_streaming, false);
+    assert.equal(h.meta.state.energy_streaming, undefined);
+    assert.equal(h.commands.filter(x => x.command === 'dataQuery').length, 0);
     const count = h.commands.length; await h.tick(600000);
     assert.equal(h.commands.length, count);
     assert.equal(h.timers.size, 0);
@@ -307,21 +393,28 @@ test('slow heartbeat does not overlap and cannot re-enable streaming after deadl
     assert.equal(h.writes().length, 3);
 });
 
-test('a real DP104 OFF cancels local heartbeats and stopping rejects a pending snapshot', async () => {
+test('a stale DP104 OFF echo cannot cancel the current local session or publish stream state', async () => {
     const h = harness(); await h.set('energy_streaming', true);
-    h.report(104, 1, Buffer.from([0]));
-    const count = h.commands.length; await h.tick(300000);
-    assert.equal(h.commands.length, count);
+    assert.deepEqual(h.report(104, 1, Buffer.from([0])), {});
+    await h.tick(5000);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [1]]);
+    await h.set('energy_streaming', false);
     h.raw.delete(117);
     const pending = assert.rejects(h.set('zone_1_active', false), /Device stopped/);
     await flush(); await h.stop(); await pending;
     assert.equal(h.timers.size, 0);
 });
 
-test('advanced expose categories are valid and unverified distance has no SET access or unit', () => {
+test('protocol metadata has confirmed distance settings and a write-only energy command', () => {
     const h = harness(), fields = h.definition.exposes(h.device, {show_advanced: true});
     const range = fields.find(x => x.name === 'detection_range');
-    assert.equal(range.access & 2, 0); assert.equal(range.unit, undefined);
+    assert.equal(range.access, 7); assert.equal(range.unit, 'cm');
+    assert.equal(range.value_min, 0); assert.equal(range.value_max, 1500); assert.equal(range.value_step, 50);
+    const command = fields.find(x => x.name === 'energy_streaming');
+    assert.equal(command.type, 'enum'); assert.equal(command.access, 2);
+    assert.deepEqual(Array.from(command.values), ['ON', 'OFF']);
+    assert(!fields.find(x => x.name === 'zone_1_active').description.includes('cm'));
+    assert.equal(fields.find(x => x.name === 'zone_1_motion_threshold').label, 'Zone 1 threshold group 1');
     assert.equal(fields.find(x => x.name === 'energy_streaming').category, 'config');
     const energy = fields.find(x => x.name === 'zone_1_motion_energy');
     assert.equal(energy.category, 'diagnostic');

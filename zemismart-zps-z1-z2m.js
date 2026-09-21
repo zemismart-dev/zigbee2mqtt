@@ -15,21 +15,21 @@ const REPORT_TIMEOUT_MS = 10000;
 const QUERY_INTERVAL_MS = 3000;
 const STREAM_INTERVAL_MS = 5000;
 const STREAM_MAX_MS = 5 * 60 * 1000;
-// The loader does not emit stop for the old module on hot replacement.
-// Keep a shared registry solely to cancel that module's local tasks on the next load.
+// Cleanup barriers survive hot replacement, so an old OFF cannot follow a new ON.
+const pendingCleanup = store.getValue('zemismart-zps-z1', 'pendingCleanup', new Map());
+store.putValue('zemismart-zps-z1', 'pendingCleanup', pendingCleanup);
 const runtime = new Map();
-for (const state of store.getValue('zemismart-zps-z1', 'runtime', new Map()).values()) {
-    state.stopped = true;
-    stopKeepAlive(state);
-    for (const cancel of state.delays || []) cancel();
-    for (const waiter of [...state.waiters]) waiter.finish(new Error('[ZPS-Z1] Converter reloaded'));
+for (const [ieeeAddr, state] of store.getValue('zemismart-zps-z1', 'runtime', new Map())) {
+    void shutdownRuntime(ieeeAddr, state);
 }
 store.putValue('zemismart-zps-z1', 'runtime', runtime);
 
 function getRuntime(device) {
     if (!runtime.has(device.ieeeAddr)) {
-        runtime.set(device.ieeeAddr, {queue: Promise.resolve(), waiters: new Set(), generation: 0,
-            energyPending: Promise.resolve(), queryQueue: Promise.resolve(), delays: new Set(), stopped: false, lastQuery: -Infinity});
+        const barrier = pendingCleanup.get(device.ieeeAddr) || Promise.resolve();
+        runtime.set(device.ieeeAddr, {queue: barrier, waiters: new Set(), generation: 0,
+            energyPending: barrier, queryQueue: barrier, delays: new Set(), stopped: false, lastQuery: -Infinity,
+            energyMayBeOn: false});
     }
     return runtime.get(device.ieeeAddr);
 }
@@ -41,11 +41,48 @@ function stopKeepAlive(state) {
     state.energyTimer = state.energyDeadline = undefined;
 }
 
-async function sendDP(endpoint, dp, datatype, data, state) {
-    if (state.stopped) throw new Error('[ZPS-Z1] Device stopped');
+async function sendFrame(endpoint, dp, datatype, data) {
     await endpoint.command(TUYA_CLUSTER, 'dataRequest', {
         seq: Math.round(Math.random() * 0xFFFF), dpValues: [{dp, datatype, data: [...data]}],
     }, {disableDefaultResponse: true});
+}
+
+async function sendDP(endpoint, dp, datatype, data, state) {
+    if (state.stopped) throw new Error('[ZPS-Z1] Device stopped');
+    if (dp === DP.HEARTBEAT_ENABLE) {
+        state.streamEndpoint = endpoint;
+        // A failed ACK does not prove that an attempted ON did not reach the MCU.
+        if (data[0] === 1) state.energyMayBeOn = true;
+    }
+    await sendFrame(endpoint, dp, datatype, data);
+    if (dp === DP.HEARTBEAT_ENABLE && data[0] === 0) state.energyMayBeOn = false;
+}
+
+function shutdownRuntime(ieeeAddr, state) {
+    if (state.cleanup) return state.cleanup;
+    state.stopped = true;
+    stopKeepAlive(state);
+    for (const cancel of state.delays || []) cancel();
+    for (const waiter of [...state.waiters]) waiter.finish(new Error('[ZPS-Z1] Device stopped'));
+    const previous = pendingCleanup.get(ieeeAddr) || Promise.resolve();
+    const cleanup = (async () => {
+        // Includes initial ON, not only periodic heartbeats. No new ordinary commands
+        // can start after stopped=true; the sole exception is this final safety OFF.
+        await Promise.allSettled([previous, state.queue, state.energyPending]);
+        if (state.energyMayBeOn && state.streamEndpoint) {
+            try {
+                await sendFrame(state.streamEndpoint, DP.HEARTBEAT_ENABLE, DT.BOOL, [0]);
+                state.energyMayBeOn = false;
+            } catch (error) {
+                logger.warning(`Energy reporting shutdown OFF failed: ${error.message}`, NS);
+            }
+        }
+    })().finally(() => {
+        if (pendingCleanup.get(ieeeAddr) === cleanup) pendingCleanup.delete(ieeeAddr);
+    });
+    state.cleanup = cleanup;
+    pendingCleanup.set(ieeeAddr, cleanup);
+    return cleanup;
 }
 
 function queryDelay(state, ms) {
@@ -111,10 +148,9 @@ function startKeepAlive(device, endpoint, state) {
             await enqueue(state, async () => {
                 if (state.generation !== expiredGeneration) return;
                 await sendDP(endpoint, DP.HEARTBEAT_ENABLE, DT.BOOL, [0], state);
-                await queryState(endpoint, state, true);
             });
         } catch (error) { logger.warning(`Energy streaming auto-off failed: ${error.message}`, NS); }
-        // Only a real DP104 report changes the displayed state.
+        // DP104 is write-only. No readable stream state is inferred from this request.
     }, STREAM_MAX_MS);
     state.energyDeadline.unref?.();
 }
@@ -230,7 +266,8 @@ const fzConverter = {
             switch (dpv.dp) {
                 case DP.PRESENCE_STATE:
                     result.presence_state = ['absence', 'presence', 'sensor_close'][buf[0]];
-                    result.occupancy = buf[0] === 1;
+                    // The protocol does not define sensor_close as an absence measurement.
+                    if (buf[0] !== 2) result.occupancy = buf[0] === 1;
                     break;
                 case DP.DETECTION_RANGE: result.detection_range = buf.readUInt32BE(0); break;
                 case DP.ILLUMINANCE: result.illuminance = buf.readUInt32BE(0); break;
@@ -238,8 +275,8 @@ const fzConverter = {
                     result.auto_calibration_status = ['standby', 'start', 'learning', 'success', 'fail', 'cancel'][buf[0]];
                     break;
                 case DP.HEARTBEAT_ENABLE:
-                    result.energy_streaming = buf[0] === 1;
-                    if (!result.energy_streaming) stopKeepAlive(state);
+                    // Passive echoes are not stream state and may belong to an older command.
+                    // They must not cancel the current local heartbeat session.
                     break;
                 case DP.SENSITIVITY_PRESET:
                     result.sensitivity_preset = ['high', 'medium', 'low', 'custom'][buf[0]];
@@ -277,7 +314,7 @@ const tzConverter = {
         const motion = ZONE_MOTION_THR_KEYS.includes(key);
         const presence = ZONE_PRESENCE_THR_KEYS.includes(key);
         if (key === 'detection_range') {
-            throw new Error('[ZPS-Z1] detection_range is read-only until DP2 units and semantics are verified');
+            dp = DP.DETECTION_RANGE; datatype = DT.VALUE; data = uint32(numberValue(key, value, 0, 1500, 50));
         } else if (key === 'presence_clear_cooldown') {
             dp = DP.NO_PERSON_TIME; datatype = DT.VALUE; data = uint32(numberValue(key, value, 2, 60));
         } else if (key === 'sensitivity_preset') {
@@ -302,7 +339,9 @@ const tzConverter = {
         }
         const requestedEnergy = state.energyRequest;
         await enqueue(state, async () => {
-            if (zone || motion || presence) {
+            if (key === 'detection_range') {
+                await writeConfirmed(endpoint, state, dp, datatype, data);
+            } else if (zone || motion || presence) {
                 // Fresh complete raw bytes preserve other zones, including mode 2 and rounding bits.
                 data = await readRaw(endpoint, state, dp);
                 const index = Number(key.split('_')[1]) - 1;
@@ -310,13 +349,13 @@ const tzConverter = {
                 data[index + (presence ? ZONE_COUNT : 0)] = zone ? (value ? (data[index] || 1) : 0) : value;
                 const matches = zone ? actual => actual.every((v, i) => (v !== 0) === (data[i] !== 0)) : undefined;
                 await writeConfirmed(endpoint, state, dp, datatype, data, matches);
-                if (!zone) await writeConfirmed(endpoint, state, DP.SENSITIVITY_PRESET, DT.ENUM, [3]);
+                // The supplied protocol does not specify an automatic preset change.
             } else if (key === 'energy_streaming') {
                 if (!value) stopKeepAlive(state);
                 await state.energyPending.catch(() => {});
                 await sendDP(endpoint, dp, datatype, data, state);
                 if (value && !state.stopped && state.energyRequest === requestedEnergy) startKeepAlive(meta.device, endpoint, state);
-                await queryState(endpoint, state, true);
+                // DP104 only controls the MCU reporting heartbeat; dataQuery is not a readback for it.
             } else {
                 await sendDP(endpoint, dp, datatype, data, state);
                 await queryState(endpoint, state, true);
@@ -325,6 +364,7 @@ const tzConverter = {
         });
     },
     async convertGet(entity, key, meta) {
+        if (key === 'energy_streaming') throw new Error('[ZPS-Z1] energy_streaming is a write-only heartbeat request, not a queryable state');
         const state = getRuntime(meta.device);
         await queryState(meta.device.getEndpoint(1), state);
     },
@@ -338,7 +378,7 @@ const ea = e.access;
 function buildZoneActiveExposes() {
     return Array.from({ length: ZONE_COUNT }, (_, i) =>
         e.binary(`zone_${i + 1}_active`, ea.ALL, true, false)
-            .withDescription(`${i * 50}\u2013${(i + 1) * 50}cm`).withCategory('config'),
+            .withDescription(`Zone ${i + 1}: 0 is masked; 1/2 are unmasked presence/absence reports. Physical distance boundaries are not specified.`).withCategory('config'),
     );
 }
 
@@ -364,10 +404,12 @@ function buildThresholdExposes() {
     for (let i = 1; i <= ZONE_COUNT; i++) {
         items.push(
             e.numeric(`zone_${i}_motion_threshold`, ea.ALL)
-                .withDescription(`Zone ${i} motion trigger threshold (raw 0–255). Switches sensitivity to custom.`)
+                .withLabel(`Zone ${i} threshold group 1`)
+                .withDescription(`Raw DP124 byte ${i} (0–255). Legacy motion_threshold key retained; the protocol does not identify the physical role of this group.`)
                 .withValueMin(0).withValueMax(255).withValueStep(1).withCategory('config'),
             e.numeric(`zone_${i}_presence_threshold`, ea.ALL)
-                .withDescription(`Zone ${i} presence trigger threshold (raw 0–255). Switches sensitivity to custom.`)
+                .withLabel(`Zone ${i} threshold group 2`)
+                .withDescription(`Raw DP124 byte ${ZONE_COUNT + i} (0–255). Legacy presence_threshold key retained; the protocol does not identify the physical role of this group.`)
                 .withValueMin(0).withValueMax(255).withValueStep(1).withCategory('config'),
         );
     }
@@ -387,7 +429,7 @@ function buildAllExposes() {
             .withDescription(
                 'absence — no one detected. ' +
                 'presence — person detected. ' +
-                'sensor_close — detection zone is physically obstructed or sensor is disabled.',
+                'sensor_close — protocol state 2; its physical meaning is not specified. The last occupancy value is retained.',
             ),
 
         e.numeric('illuminance', ea.STATE)
@@ -396,9 +438,10 @@ function buildAllExposes() {
             .withValueMin(0).withValueMax(1300),
 
         // ── Detection tuning ──────────────────────────────────────────────────
-        e.numeric('detection_range', ea.STATE_GET).withCategory('diagnostic')
-            .withLabel('Detection range (unverified)')
-            .withDescription('Raw DP2 report. Units and the meaning of 0 are not verified; read-only to avoid changing an uncertain setting.')
+        e.numeric('detection_range', ea.ALL).withCategory('config')
+            .withLabel('Radar distance setting')
+            .withUnit('cm').withValueMin(0).withValueMax(1500).withValueStep(50)
+            .withDescription('Protocol DP2: 0–1500 cm in steps of 50. The meaning of 0 and actual sensing coverage are not specified. Only the 0-to-50-to-0 setting round trip has been tested on the sample.')
             .withHomeAssistant({enabledByDefault: false}),
 
         e.numeric('presence_clear_cooldown', ea.ALL).withCategory('config')
@@ -408,18 +451,15 @@ function buildAllExposes() {
 
         e.enum('sensitivity_preset', ea.ALL, ['high', 'medium', 'low', 'custom']).withCategory('config')
             .withDescription(
-                '"high" — detects subtle movement and stationary presence. ' +
-                '"medium" — balanced default. ' +
-                '"low" — only strong or close-range activity triggers detection. ' +
-                '"custom" — per-zone thresholds active (set automatically when any zone threshold is written).',
+                'Protocol presets: high=0, medium=1 (named min in the protocol), low=2, custom=3. ' +
+                'Detailed detection behavior and its relationship to DP124 thresholds require device verification.',
             ),
 
         // ── Auto-calibration ──────────────────────────────────────────────────
         e.enum('auto_calibration', ea.SET, ['start', 'cancel']).withCategory('config')
             .withDescription(
-                'Trigger AI self-learning to auto-tune thresholds for your environment. ' +
-                'Set to "start", leave the room for ~60 s, then check auto_calibration_status. ' +
-                'Allow 5–10 minutes of sensor warm-up before first calibration run.',
+                'Start or cancel automatic threshold learning. The protocol does not specify ' +
+                'warm-up time, learning duration or required room conditions. This operation can change thresholds.',
             ),
 
         e.enum('auto_calibration_status', ea.STATE, ['standby', 'start', 'learning', 'success', 'fail', 'cancel'])
@@ -433,10 +473,12 @@ function buildAllExposes() {
             .withDescription('Physical LED indicator of the sensor.'),
 
         // ── Real-time energy streaming ────────────────────────────────────────
-        e.binary('energy_streaming', ea.ALL, true, false).withCategory('config')
+        e.enum('energy_streaming', ea.SET, ['ON', 'OFF']).withCategory('config')
+            .withLabel('Energy reporting command')
             .withDescription(
-                'Enable diagnostic per-zone radar energy reporting. ' +
-                'Automatically stops sending keep-alive commands and requests OFF after 5 minutes. Reported state changes only on device confirmation.',
+                'Write-only DP104 command: ON starts 5-second heartbeats; OFF stops them and sends an explicit stop. Legacy boolean commands are accepted. ' +
+                'Firmware timeout is not relied on: the tested sample continued beyond the documented 10 seconds. ' +
+                'A local 5-minute limit and lifecycle cleanup request OFF; this is a command, not a readable device state.',
             ),
 
         // ── Per-zone live energy (DP102, diagnostic) ──────────────────────────
@@ -463,11 +505,9 @@ const definition = {
         if (event.type !== 'stop') return;
         const state = runtime.get(event.data.ieeeAddr);
         if (!state) return;
-        state.stopped = true;
-        stopKeepAlive(state);
-        for (const cancel of state.delays) cancel();
-        for (const waiter of [...state.waiters]) waiter.finish(new Error('[ZPS-Z1] Device stopped'));
+        const cleanup = shutdownRuntime(event.data.ieeeAddr, state);
         runtime.delete(event.data.ieeeAddr);
+        await cleanup;
     },
 
     configure: async (device, coordinatorEndpoint) => {
