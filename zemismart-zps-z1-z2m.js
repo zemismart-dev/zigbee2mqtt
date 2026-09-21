@@ -374,33 +374,11 @@ function buildThresholdExposes() {
     return items;
 }
 
-// ─── Device definition ────────────────────────────────────────────────────────
-const definition = {
-    fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE284_ft7qqpx3', priority: 1}],
-    model: 'ZPS-Z1',
-    vendor: 'Zemismart',
-    description: '24 GHz mmWave presence sensor',
-    fromZigbee: [fzConverter],
-    toZigbee: [tzConverter],
-
-    onEvent: async (event) => {
-        if (event.type !== 'stop') return;
-        const state = runtime.get(event.data.ieeeAddr);
-        if (!state) return;
-        state.stopped = true;
-        stopKeepAlive(state);
-        for (const cancel of state.delays) cancel();
-        for (const waiter of [...state.waiters]) waiter.finish(new Error('[ZPS-Z1] Device stopped'));
-        runtime.delete(event.data.ieeeAddr);
-    },
-
-    configure: async (device, coordinatorEndpoint) => {
-        const endpoint = device.getEndpoint(1);
-        await endpoint.bind(TUYA_CLUSTER, coordinatorEndpoint);
-        await queryState(endpoint, getRuntime(device), true);
-    },
-
-    exposes: [
+// Keep the customer-facing default small. Advanced visibility is a standard Z2M
+// device option, so importing this one converter is sufficient on either frontend.
+const BASIC_PROPERTIES = ['occupancy', 'illuminance', 'sensitivity_preset', 'presence_clear_cooldown', 'led_indicator'];
+function buildAllExposes() {
+    return [
         // ── Primary presence & light ──────────────────────────────────────────
         e.binary('occupancy', ea.STATE, true, false)
             .withDescription('Binary presence detection. Person detected (true) or not detected (false).'),
@@ -469,7 +447,45 @@ const definition = {
 
         // ── Per-zone thresholds (DP124) ───────────────────────────────────────
         ...buildThresholdExposes(),
+    ];
+}
+
+// ─── Device definition ────────────────────────────────────────────────────────
+const definition = {
+    fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE284_ft7qqpx3', priority: 1}],
+    model: 'ZPS-Z1',
+    vendor: 'Zemismart',
+    description: '24 GHz mmWave presence sensor',
+    fromZigbee: [fzConverter],
+    toZigbee: [tzConverter],
+
+    onEvent: async (event) => {
+        if (event.type !== 'stop') return;
+        const state = runtime.get(event.data.ieeeAddr);
+        if (!state) return;
+        state.stopped = true;
+        stopKeepAlive(state);
+        for (const cancel of state.delays) cancel();
+        for (const waiter of [...state.waiters]) waiter.finish(new Error('[ZPS-Z1] Device stopped'));
+        runtime.delete(event.data.ieeeAddr);
+    },
+
+    configure: async (device, coordinatorEndpoint) => {
+        const endpoint = device.getEndpoint(1);
+        await endpoint.bind(TUYA_CLUSTER, coordinatorEndpoint);
+        await queryState(endpoint, getRuntime(device), true);
+    },
+
+    options: [
+        e.binary('show_advanced', ea.SET, true, false)
+            .withLabel('Advanced controls')
+            .withDescription('Show zone tuning, self-learning and diagnostic fields. Disabled by default. This also changes which advanced entities are discovered by Home Assistant; MQTT fields remain available.'),
     ],
+    exposes: (_device, options = {}) => {
+        const fields = buildAllExposes();
+        if (options.show_advanced === true) return fields;
+        return BASIC_PROPERTIES.map(property => fields.find(field => field.property === property));
+    },
 
     meta: {
         tuyaDatapoints: null, // custom fz/tz above; disable built-in Tuya DP handler

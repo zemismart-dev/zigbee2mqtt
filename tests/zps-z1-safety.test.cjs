@@ -319,7 +319,7 @@ test('a real DP104 OFF cancels local heartbeats and stopping rejects a pending s
 });
 
 test('advanced expose categories are valid and unverified distance has no SET access or unit', () => {
-    const h = harness(), fields = h.definition.exposes;
+    const h = harness(), fields = h.definition.exposes(h.device, {show_advanced: true});
     const range = fields.find(x => x.name === 'detection_range');
     assert.equal(range.access & 2, 0); assert.equal(range.unit, undefined);
     assert.equal(fields.find(x => x.name === 'energy_streaming').category, 'config');
@@ -328,4 +328,31 @@ test('advanced expose categories are valid and unverified distance has no SET ac
     assert.equal(energy.value_max, 255);
     assert.equal(energy.homeassistant.enabledByDefault, false);
     assert.equal(fields.find(x => x.name === 'zone_1_motion_threshold').value_max, 255);
+});
+
+test('default UI is compact and advanced visibility never queries or writes the device', () => {
+    const h = harness();
+    const names = options => Array.from(h.definition.exposes(h.device, options), x => x.property);
+    const basic = ['occupancy', 'illuminance', 'sensitivity_preset', 'presence_clear_cooldown', 'led_indicator'];
+    assert.deepEqual(names(undefined), basic);
+    assert.deepEqual(names({show_advanced: false}), basic);
+    assert.deepEqual(names({show_advanced: 'false'}), basic);
+    const advanced = names({show_advanced: true});
+    assert.equal(advanced.length, 60);
+    assert.equal(new Set(advanced).size, advanced.length);
+    for (const field of [...basic, 'energy_streaming', 'auto_calibration', 'detection_range', 'zone_10_presence_threshold']) {
+        assert(advanced.includes(field));
+    }
+    assert.deepEqual(names({show_advanced: false}), basic);
+    assert.equal(h.commands.length, 0);
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.definition.options[0].property, 'show_advanced');
+});
+
+test('advanced MQTT commands and raw reports remain available while advanced fields are hidden', async () => {
+    const h = harness();
+    assert(!h.definition.exposes(h.device, {}).some(x => x.property === 'zone_3_motion_threshold'));
+    await h.set('zone_3_motion_threshold', 200);
+    assert.equal(h.raw.get(124)[1][2], 200);
+    assert.equal(h.meta.state.zone_3_motion_threshold, 200);
 });
