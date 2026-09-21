@@ -395,7 +395,7 @@ function buildThresholdExposes() {
 
 // ─── Device definition ────────────────────────────────────────────────────────
 const definition = {
-    zigbeeModel: ['TS0601'],
+    fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE284_ft7qqpx3', priority: 1}],
     model: 'ZPS-Z1',
     vendor: 'Zemismart',
     description: '24 GHz mmWave presence sensor',
