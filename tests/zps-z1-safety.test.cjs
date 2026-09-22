@@ -336,6 +336,49 @@ test('explicit OFF clears local timers even if sending OFF fails', async () => {
     assert.equal(h.timers.size, 0);
 });
 
+test('a failed initial ON explicitly sends OFF without waiting for lifecycle stop', async () => {
+    const h = harness();
+    h.setHook((command, payload) => {
+        if (command === 'dataRequest' && payload.dpValues[0].dp === 104 && payload.dpValues[0].data[0] === 1) {
+            throw Error('ON acknowledgement lost');
+        }
+    });
+    await assert.rejects(h.set('energy_streaming', true), /ON acknowledgement lost/);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
+    await h.tick(600000);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
+    assert.equal(h.timers.size, 0);
+    await h.stop();
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
+});
+
+test('failed-ON cleanup finishes before a later ON even when its OFF fails', async () => {
+    const h = harness();
+    let onCount = 0, releaseOff;
+    h.setHook((command, payload) => {
+        if (command !== 'dataRequest' || payload.dpValues[0].dp !== 104) return;
+        if (payload.dpValues[0].data[0] === 1 && ++onCount === 1) throw Error('ON acknowledgement lost');
+        if (payload.dpValues[0].data[0] === 0 && !releaseOff) {
+            return new Promise((resolve, reject) => { releaseOff = () => reject(Error('OFF acknowledgement lost')); });
+        }
+    });
+    const failedOn = assert.rejects(h.setWithoutDrivingClock('energy_streaming', true), /ON acknowledgement lost/);
+    await flush();
+    assert.equal(typeof releaseOff, 'function');
+    const retryOn = h.setWithoutDrivingClock('energy_streaming', true);
+    await flush();
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0]]);
+    releaseOff();
+    await Promise.all([failedOn, retryOn]);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0], [1]]);
+    assert(h.warnings.some(x => x.includes('failed-ON cleanup OFF failed')));
+    await h.tick(5000);
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0], [1], [1]]);
+    await h.stop();
+    assert.deepEqual(h.writes().map(x => x.data), [[1], [0], [1], [1], [0]]);
+    assert.equal(h.timers.size, 0);
+});
+
 test('OFF requested while initial ON awaits ACK prevents a later heartbeat restart', async () => {
     const h = harness();
     let release;

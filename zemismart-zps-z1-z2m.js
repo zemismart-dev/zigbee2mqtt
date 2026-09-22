@@ -353,7 +353,20 @@ const tzConverter = {
             } else if (key === 'energy_streaming') {
                 if (!value) stopKeepAlive(state);
                 await state.energyPending.catch(() => {});
-                await sendDP(endpoint, dp, datatype, data, state);
+                try {
+                    await sendDP(endpoint, dp, datatype, data, state);
+                } catch (error) {
+                    // ON may have reached the MCU despite a failed ACK. Keep its safety
+                    // OFF inside this queue entry so it cannot follow a later ON request.
+                    if (value && !state.stopped) {
+                        try {
+                            await sendDP(endpoint, DP.HEARTBEAT_ENABLE, DT.BOOL, [0], state);
+                        } catch (cleanupError) {
+                            logger.warning(`Energy reporting failed-ON cleanup OFF failed: ${String(cleanupError)}`, NS);
+                        }
+                    }
+                    throw error;
+                }
                 if (value && !state.stopped && state.energyRequest === requestedEnergy) startKeepAlive(meta.device, endpoint, state);
                 // DP104 only controls the MCU reporting heartbeat; dataQuery is not a readback for it.
             } else {
