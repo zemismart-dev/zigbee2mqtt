@@ -1,6 +1,8 @@
 const exposes = require("zigbee-herdsman-converters/lib/exposes");
 const modernExtend = require("zigbee-herdsman-converters/lib/modernExtend");
 const tuya = require("zigbee-herdsman-converters/lib/tuya");
+const {logger} = require("zigbee-herdsman-converters/lib/logger");
+const {Zcl} = require("zigbee-herdsman");
 
 const e = exposes.presets;
 const ea = exposes.access;
@@ -11,6 +13,7 @@ const RELAY_STATUS_DPS = [29, 30, 31, 32];
 const NAME_DPS = [105, 106, 107, 108];
 const MAX_NAME_BYTES = 50;
 const STATE_PROPERTIES = STATE_DPS.map((_, index) => `state_l${index + 1}`);
+const NS = "zhc:zemismart:zms206";
 
 const indicatorStatus = tuya.valueConverterBasic.lookup({
     off: tuya.enum(0),
@@ -87,6 +90,21 @@ const privateScreenCluster = modernExtend.deviceAddCustomCluster("manuSpecificTu
     },
 });
 
+// Keep the undocumented payload intact; the frame can then receive a standard ZCL response.
+const privateScreenInfoCluster = modernExtend.deviceAddCustomCluster("manuSpecificTuyaScreenInfo", {
+    name: "manuSpecificTuyaScreenInfo",
+    ID: 0xfc03,
+    attributes: {},
+    commands: {},
+    commandsResponse: {
+        unknown00: {
+            name: "unknown00",
+            ID: 0x00,
+            parameters: [{name: "payload", type: Zcl.BuffaloZclDataType.BUFFER}],
+        },
+    },
+});
+
 const fzLocal = {
     throttledMcuSyncTime: {
         cluster: "manuSpecificTuya",
@@ -115,6 +133,15 @@ const fzLocal = {
         cluster: "manuSpecificTuyaScreen",
         type: ["commandUnknownD0", "commandUnknownD2"],
         convert: () => undefined,
+    },
+    privateScreenInfo: {
+        cluster: "manuSpecificTuyaScreenInfo",
+        type: ["commandUnknown00"],
+        convert: (model, msg) => {
+            const payload = Buffer.from(msg.data.payload ?? []);
+            logger.debug(`Private screen report 0xfc03/0x00: ${payload.toString("hex")}`, NS);
+            return undefined;
+        },
     },
 };
 
@@ -155,12 +182,18 @@ Object.assign(fzLocal, {
         ...tuya.fz.datapoints,
         convert: (model, msg, publish, options, meta) => {
             const result = tuya.fz.datapoints.convert(model, msg, publish, options, meta);
-            if (!result || msg.type !== "commandDataReport") {
+            if (!result) {
                 return result;
             }
 
             const keys = Object.keys(result);
-            const isUnchangedStateReport = keys.length > 0 && keys.every((key) => (
+            if (keys.length === 0) {
+                return undefined;
+            }
+            if (msg.type !== "commandDataReport") {
+                return result;
+            }
+            const isUnchangedStateReport = keys.every((key) => (
                 STATE_PROPERTIES.includes(key) && meta.state?.[key] === result[key]
             ));
 
@@ -243,6 +276,18 @@ const tuyaDatapoints = (channels) => {
         [channels === 4 ? 201 : 209, "cycle_schedule", rawStringConverter],
         [210, "_dp210", ignoredDatapoint],
     ];
+    if (channels === 4) {
+        // Observed on four-gang panels; semantics remain unknown, so do not expose writable settings.
+        for (const dp of [112, 113, 114]) {
+            result.push([dp, null, {
+                from: (value) => {
+                    logger.debug(`Unmapped screen DP ${dp}: ${JSON.stringify(value)}`, NS);
+                    return undefined;
+                },
+                to: null,
+            }]);
+        }
+    }
     for (let channel = 1; channel <= channels; channel++) {
         result.push([STATE_DPS[channel - 1], `state_l${channel}`, tuya.valueConverter.onOff]);
         result.push([COUNTDOWN_DPS[channel - 1], `countdown_l${channel}`, tuya.valueConverter.countdown]);
@@ -322,10 +367,15 @@ const createDefinition = ({channels, fingerprints}) => ({
     model: `TS0601_${channels}gang_screen_switch_zms206`,
     vendor: "Zemismart",
     description: `${channels} gang Zemismart ZMS206 screen switch`,
-    extend: [tuya.modernExtend.tuyaBase({dp: true, timeStart: "off"}), privateScreenCluster],
+    extend: [
+        tuya.modernExtend.tuyaBase({timeStart: "off"}),
+        privateScreenCluster,
+        privateScreenInfoCluster,
+    ],
     fromZigbee: [
         fzLocal.throttledMcuSyncTime,
         fzLocal.ignorePrivateClusterStatus,
+        fzLocal.privateScreenInfo,
         fzLocal.datapoints,
         fzLocal.ignoreTuyaConfigureResponse,
     ],
