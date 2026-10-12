@@ -1,105 +1,115 @@
-# zigbee2mqtt
+# Zemismart Zigbee2MQTT External Converters
 
-用于存储 Zemismart 公司产品相关的 Zigbee2MQTT external converter 配置文件。
+English | [简体中文](README.zh-CN.md)
 
-| 配置文件 | Zigbee2MQTT 匹配型号 | 指纹型号 / manufacturerName | 说明 |
+Zigbee2MQTT external converter files for Zemismart products. Match the complete device fingerprint in the table below before choosing a file; support and validation limits vary by model.
+
+**Zemismart website: [www.zemismart.com](https://www.zemismart.com/)**
+
+## About Zemismart
+
+Zemismart offers smart-home products including motorized curtains and blinds, switches, lighting, sensors, and gateways. Visit the [official website](https://www.zemismart.com/) for product information. Protocol and platform compatibility depend on the specific model; the files in this repository cover only the listed fingerprints and features.
+
+## Device configurations
+
+| Configuration file | Zigbee2MQTT model match | Fingerprint model / manufacturerName | Description |
 | --- | --- | --- | --- |
-| `214c.js` | `TS0601` | `_TZE284_vuwtqx0t`, `_TZE200_vuwtqx0t` | 超声波水表阀，支持累计/日/月用水、阀门和告警等 DP |
-| `DN15-223F.js` | `TS0601` | `_TZE200_jt50ea5d` | DN15-223F 超声波热/冷表，支持 DP7 热量计量开关、DP8 累计热量、水量、温度、电压和周期上报 |
-| `KES-606-composite.js` | `TS0726` | `_TZ3000_ovbvmhiq`, `_TZ3000_icoxotza`, `_TZ3000_cziew6eu`, `_TZ3000_hurauima` | KES 606 复合场景开关 1/2/3/4 路，支持普通开关/场景模式；场景模式下 App 点击通断无效，避免误操作 |
-| `ZMD-208.js` | `TS0601` | 1 路: `_TZE28C1000000_huc4fueh`<br>2 路: `_TZE28C1000000_gheewd2t`<br>3 路: `_TZE28C1000000_8jwv5lbl`, `_TZE284_8jwv5lbl` | ZMD-208 屏显调光开关，支持 1/2/3 路开关与亮度、最小/最大亮度、负载类型、倒计时、屏显名称、背光、颜色、童锁和息屏时间；带重复 DP 去重、MCU 时间同步节流及 `0xE000` 私有状态应答，1/2 路 DP 映射待实机验证 |
-| `ZN2S-RS1E.js` | `TS0601` | `_TZE204_e1hutaaj`, `_TZE284_e1hutaaj`, `_TZE284_2jnoy8dj` | ZN2S-RS1E 触摸风扇控制器，支持开关、风速、倒计时、上电行为、指示灯、背光、童锁、最低风速和风扇开关状态指示灯颜色 |
-| `ZN2S-L01E-SMB.js` | `TS0601` | `_TZE200_ephrk8to`, `_TZE200_ahyyfhqk`, `_TZE200_zuphzsmo`, `_TZE200_6si1pnia` | Zemismart 1/2/3/4 路场景开关，支持每路在开关模式和场景模式之间切换 |
-| `zemismart_zm16b.js` | `TS0601` | `_TZE284_3mzb0sdz` | ZM16B 电池管状窗帘电机，支持开关停、位置、电机方向、上下限设置和电量；配置、设备上线和每 12 小时主动查询 DP，避免电量长时间为空 |
-| `zemismart_zm86_2z.js` | `TS0601` | `_TZE200_cf1sl3tj` | ZM86-2Z 罗马杆 I/U 型窗帘电机，外部转换器精确指纹优先匹配；支持开关停、DP2 位置、电机方向、限位、点动、电量和故障状态，并将语义未确认的 DP3 保留为只读诊断值，避免覆盖位置和运行状态 |
-| `zemismart-zpm1-z2m.js` | `TS0601` | `_TZE284_6hrnp30w` | ZMP1 电池窗帘电机，支持开关停、位置、方向、限位和每 12 小时通过 Tuya dataQuery 主动读取电量 |
-| `zemismart-zps-z1-z2m.js` | `TS0601` | `_TZE284_ft7qqpx3` | ZPS-Z1 24 GHz 毫米波人体存在传感器；精确指纹、精简默认界面、可选高级设置；距离参数按厂家协议，能量命令带显式关闭保护 |
-| [`zemismart_ts1201_ir.mjs`](zemismart_ts1201_ir.mjs) | `TS1201` | `_TZ3290_qazgdsae` | 红外遥控器 1.4.0 单文件试点方案；码库和许可证已内置，只需安装此 `.mjs`；支持品牌匹配、空调控制、命名学习及 HA MQTT 控件，见下文 |
-| `zemismart_zmr4.js` | `TS0044` | `_TZ3000_xwuveizv` | ZMR4 四键无线遥控器，支持每键单击、双击、长按动作、电池/电压及 12 个本地动作模拟按钮；精确指纹优先于上游定义 |
-| `zm25z.js` | `TS0301` | `_TZE200_cirjrpxe` | ZM25Z 强电窗帘电机，支持开关停、位置、方向和限位设置 |
-| `zms1.js` | `TS0601` | `_TZE284_zuq5xxib`, `_TZE200_fu14oapz` | ZMS1-TYZ 窗帘电机，支持开关停、整数百分比及运行指示；284 版本另提供方向和原始速度设置，fu14oapz 版本另提供 DP7/DP12 原始诊断。实测范围与限制见下文 |
-| `zmd206_screen_dimmer.js` | `TS0601` | 1 路: `_TZE28C1000000_5aico93l`, `_TZE284_5aico93l`<br>2 路: `_TZE284_pyh4zt7w`<br>3 路: `_TZE28C1000000_k9e7ihec`, `_TZE284_k9e7ihec` | ZMD-206 屏显调光开关，支持每路开关/亮度、亮度上下限、负载类型、倒计时、屏显名称、上电行为、背光、指示灯、童锁和渐变速度 |
-| `zm208.js` | `TS0601` | 3 路: `_TZE284_xvywzhmi`, `_TZE28C1000000_xvywzhmi` | ZMS-208US-3 非调光屏显开关，支持每路开关、倒计时、屏显名称和童锁；带重复 DP 去重、MCU 时间同步节流及 `0xE000` 私有状态应答 |
-| `zms206.js` | `TS0601` | 1 路: `_TZE204_lnyz4a6v`, `_TZE204_sa2ueffe`, `_TZE204_zuepxzck`, `_TZE28C1000000_lnyz4a6v`, `_TZE284_lnyz4a6v`, `_TZE284_1tnysxwl`, `_TZE284_sa2ueffe`, `_TZE284_rzdkn5rx`<br>2 路: `_TZE204_3ctwoaip`, `_TZE204_dmckrsxg`, `_TZE28C1000000_dmckrsxg`, `_TZE284_3ctwoaip`, `_TZE284_dmckrsxg`, `_TZE284_a2teqi5u`, `_TZE28C1000000_a2teqi5u`<br>3 路: `_TZE204_e4pf6l87`, `_TZE204_k7v0eqke`, `_TZE204_iyki9kjp`, `_TZE284_k7v0eqke`, `_TZE284_e4pf6l87`, `_TZE28C1000000_e4pf6l87`<br>4 路: `_TZE204_y4jqpry8`, `_TZE284_y4jqpry8`, `_TZE28C1000000_y4jqpry8`, `by _TZE28C1000000_y4jqpry8`, `_TZE204_wwaeqnrf`, `_TZE284_wwaeqnrf`, `_TZE204_xibaabmu`, `_TZE284_xibaabmu`, `_TZE28C1000000_xibaabmu`, `_TZE204_08qc13ct` | ZMS206 屏显开关，支持每路开关、屏显名称、倒计时、继电器上电状态、背光、童锁、指示灯颜色和循环计划；带 MCU 时间同步节流、重复状态去重、`0xE000`/`0xFC03` 私有报文兼容及四路 DP112–DP114 诊断保留 |
-| `zmz609.js` | `ZMZ609-2`, `ZMZ609-3` | 2 路: `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p`<br>3 路: `_TZE284_oy1nuaa5` | ZMZ609 美标屏显开关，支持两路/三路开关、计量、屏显和配置项；自动同步日期、当前天气和三天天气预报，无需 Home Assistant 自动化，可自动定位或配置经纬度 |
+| `214c.js` | `TS0601` | `_TZE284_vuwtqx0t`, `_TZE200_vuwtqx0t` | Ultrasonic water meter valve: total/daily/monthly water consumption, valve control, alarms, and related DPs |
+| `DN15-223F.js` | `TS0601` | `_TZE200_jt50ea5d` | DN15-223F ultrasonic heating/cooling meter: DP7 heat-metering switch, DP8 accumulated thermal energy, water volume, temperature, voltage, and periodic reporting |
+| `KES-606-composite.js` | `TS0726` | `_TZ3000_ovbvmhiq`, `_TZ3000_icoxotza`, `_TZ3000_cziew6eu`, `_TZ3000_hurauima` | KES 606 composite 1/2/3/4-gang scene switches with ordinary switch/scene modes; app on/off commands have no effect in scene mode to prevent unintended operation |
+| `ZMD-208.js` | `TS0601` | 1-gang: `_TZE28C1000000_huc4fueh`<br>2-gang: `_TZE28C1000000_gheewd2t`<br>3-gang: `_TZE28C1000000_8jwv5lbl`, `_TZE284_8jwv5lbl` | ZMD-208 display dimmer: 1/2/3-gang switching and brightness, minimum/maximum brightness, load type, countdown, display names, backlight, color, child lock, and screen-off timeout; includes duplicate-DP suppression, MCU time-sync throttling, and `0xE000` private-status responses; 1/2-gang DP mappings await physical-device validation |
+| `ZN2S-RS1E.js` | `TS0601` | `_TZE204_e1hutaaj`, `_TZE284_e1hutaaj`, `_TZE284_2jnoy8dj` | ZN2S-RS1E touch fan controller: switching, fan speed, countdown, power-on behavior, indicator, backlight, child lock, minimum fan speed, and indicator colors for the fan's on/off states |
+| `ZN2S-L01E-SMB.js` | `TS0601` | `_TZE200_ephrk8to`, `_TZE200_ahyyfhqk`, `_TZE200_zuphzsmo`, `_TZE200_6si1pnia` | Zemismart 1/2/3/4-gang scene switches with per-gang switch/scene mode selection |
+| `zemismart_zm16b.js` | `TS0601` | `_TZE284_3mzb0sdz` | ZM16B battery-powered tubular curtain motor: open/close/stop, position, motor direction, upper/lower limit setting, and battery; queries DPs during configuration, when the device comes online, and every 12 hours to prevent prolonged missing battery readings |
+| `zemismart_zm86_2z.js` | `TS0601` | `_TZE200_cf1sl3tj` | ZM86-2Z I/U-type curtain-rod motor; the external converter's exact fingerprint takes precedence; supports open/close/stop, DP2 position, motor direction, limits, inching, battery, and fault status; DP3 has unconfirmed semantics and remains a read-only diagnostic so it cannot overwrite position or running state |
+| `zemismart-zpm1-z2m.js` | `TS0601` | `_TZE284_6hrnp30w` | ZMP1 battery-powered curtain motor: open/close/stop, position, direction, limits, and battery queries every 12 hours using Tuya dataQuery |
+| `zemismart-zps-z1-z2m.js` | `TS0601` | `_TZE284_ft7qqpx3` | ZPS-Z1 24 GHz mmWave presence sensor; exact fingerprint, compact default interface, and optional advanced settings; distance parameters follow the manufacturer's protocol, and energy commands include explicit shutdown protection |
+| [`zemismart_ts1201_ir.mjs`](zemismart_ts1201_ir.mjs) | `TS1201` | `_TZ3290_qazgdsae` | IR remote version 1.4.0 single-file pilot; the codebook and license are embedded, so only this `.mjs` file needs installing; supports brand matching, air-conditioner control, named learning, and HA MQTT controls; see below |
+| `zemismart_zmr4.js` | `TS0044` | `_TZ3000_xwuveizv` | ZMR4 four-button wireless remote: single/double/long-press actions for each button, battery/voltage, and 12 local action-simulation buttons; the exact fingerprint takes precedence over the upstream definition |
+| `zm25z.js` | `TS0301` | `_TZE200_cirjrpxe` | ZM25Z mains-powered curtain motor: open/close/stop, position, direction, and limit setting |
+| `zms1.js` | `TS0601` | `_TZE284_zuq5xxib`, `_TZE200_fu14oapz` | ZMS1-TYZ curtain motor: open/close/stop, integer position percentages, and running indication; the 284 variant additionally exposes direction and raw speed settings, while the fu14oapz variant provides raw DP7/DP12 diagnostics; see the tested scope and limitations below |
+| `zmd206_screen_dimmer.js` | `TS0601` | 1-gang: `_TZE28C1000000_5aico93l`, `_TZE284_5aico93l`<br>2-gang: `_TZE284_pyh4zt7w`<br>3-gang: `_TZE28C1000000_k9e7ihec`, `_TZE284_k9e7ihec` | ZMD-206 display dimmer: per-gang switching/brightness, brightness limits, load type, countdown, display names, power-on behavior, backlight, indicator, child lock, and fade speed |
+| `zm208.js` | `TS0601` | 3-gang: `_TZE284_xvywzhmi`, `_TZE28C1000000_xvywzhmi` | ZMS-208US-3 non-dimming display switch: per-gang switching, countdowns, display names, and child lock; includes duplicate-DP suppression, MCU time-sync throttling, and `0xE000` private-status responses |
+| `zms206.js` | `TS0601` | 1-gang: `_TZE204_lnyz4a6v`, `_TZE204_sa2ueffe`, `_TZE204_zuepxzck`, `_TZE28C1000000_lnyz4a6v`, `_TZE284_lnyz4a6v`, `_TZE284_1tnysxwl`, `_TZE284_sa2ueffe`, `_TZE284_rzdkn5rx`<br>2-gang: `_TZE204_3ctwoaip`, `_TZE204_dmckrsxg`, `_TZE28C1000000_dmckrsxg`, `_TZE284_3ctwoaip`, `_TZE284_dmckrsxg`, `_TZE284_a2teqi5u`, `_TZE28C1000000_a2teqi5u`<br>3-gang: `_TZE204_e4pf6l87`, `_TZE204_k7v0eqke`, `_TZE204_iyki9kjp`, `_TZE284_k7v0eqke`, `_TZE284_e4pf6l87`, `_TZE28C1000000_e4pf6l87`<br>4-gang: `_TZE204_y4jqpry8`, `_TZE284_y4jqpry8`, `_TZE28C1000000_y4jqpry8`, `by _TZE28C1000000_y4jqpry8`, `_TZE204_wwaeqnrf`, `_TZE284_wwaeqnrf`, `_TZE204_xibaabmu`, `_TZE284_xibaabmu`, `_TZE28C1000000_xibaabmu`, `_TZE204_08qc13ct` | ZMS206 display switch: per-gang switching, display names, countdowns, relay power-on state, backlight, child lock, indicator color, and recurring schedules; includes MCU time-sync throttling, duplicate-state suppression, `0xE000`/`0xFC03` private-message compatibility, and retained diagnostics for four-gang DP112–DP114 |
+| `zmz609.js` | `ZMZ609-2`, `ZMZ609-3` | 2-gang: `_TZE284_o409r73p`, `_TZE28C1000000_o409r73p`<br>3-gang: `_TZE284_oy1nuaa5` | ZMZ609 US-style display switch: two/three-gang switching, metering, display, and configuration options; automatically synchronizes the date, current weather, and three-day forecast without Home Assistant automation, using automatic location or configured latitude/longitude |
 
-## TS1201 红外遥控器
+## TS1201 IR remote
 
-仅匹配 `TS1201 / _TZ3290_qazgdsae`。**1.4.0只需下载并安装 [zemismart_ts1201_ir.mjs](zemismart_ts1201_ir.mjs) 一个配置文件**。完整码库和MIT许可证声明已内置，不再读取旁置JSON，也不需要在运行时下载码库。
+Matches only `TS1201 / _TZ3290_qazgdsae`. **Version 1.4.0 requires downloading and installing just one configuration file: [zemismart_ts1201_ir.mjs](zemismart_ts1201_ir.mjs).** The complete codebook and MIT license notice are embedded; no adjacent JSON file or runtime codebook download is required.
 
-通过Z2M外部转换器入口保存并加载该文件即可。升级时覆盖同名文件，保留原有学习数据和匹配结果，无需重新配对。仓库的 `data/` 与 `scripts/embed-ts1201-z2m-codebook.py` 仅供维护重建，不需要复制到客户安装目录。旧版JSON/许可证源码移至 `data/`，内容没有改变；回滚1.3.0时应从旧版本恢复完整依赖。
+Save and load the file through Z2M's external converter interface. To upgrade, overwrite the file with the same name. Existing learned data and matching results are retained, and re-pairing is unnecessary. The repository's `data/` directory and `scripts/embed-ts1201-z2m-codebook.py` are only for maintenance and rebuilding; they do not need to be copied into the customer installation directory. The older JSON/license sources have moved to `data/` without content changes. When rolling back to 1.3.0, restore all dependencies from the older release.
 
-单文件交付保留原来的品牌逐套试机、用户确认后生成空调面板、命名学习及按需控件。空调面板显示命令估计；传输完成仍需观察家电实际响应。
+The single-file package retains sequential brand/code-set testing, an air-conditioner panel created after user confirmation, named learning, and on-demand controls. The air-conditioner panel displays command-based estimates; a completed transmission still requires observing the appliance's physical response.
 
-安装步骤见[单文件安装说明](docs/ts1201_z2m_installation.md)，日常操作见[使用指南](docs/ts1201_z2m_customer_guide.md)，测试与实机边界见[验证记录](docs/ts1201_validation.md)。该配置为工程人员部署的公司试点方案，不代表官方上游原生支持或全部功能完成实机验收。
+See the [single-file installation guide (Chinese)](docs/ts1201_z2m_installation.md), [user guide (Chinese)](docs/ts1201_z2m_customer_guide.md), and [validation record (Chinese)](docs/ts1201_validation.md) for installation, everyday use, and the limits of testing and physical-device evidence. This configuration is a company pilot intended for engineering deployment. It does not represent native upstream support or completed physical acceptance of every feature.
 
-## ZPS-Z1 匹配、设置与升级说明
+## ZPS-Z1 matching, settings, and upgrades
 
-`zemismart-zps-z1-z2m.js` 仅匹配 `TS0601 / _TZE284_ft7qqpx3`。协议依据为产品 ID `ft7qqpx3` 的《MCU SDK 快速入门指南》（2025-12-15，文件 `lowpower_protocol_ft7qqpx3_20251215.pdf`）；MCU 串口命令与 Zigbee EF00 封装分开处理，不直接混用命令编号。
+`zemismart-zps-z1-z2m.js` matches only `TS0601 / _TZE284_ft7qqpx3`. The protocol source is the manufacturer's *MCU SDK Quick Start Guide* for product ID `ft7qqpx3` (2025-12-15, file `lowpower_protocol_ft7qqpx3_20251215.pdf`). MCU serial commands and Zigbee EF00 framing are handled separately; their command numbers are not used interchangeably.
 
-**客户只需安装这一个转换器文件。**默认功能页显示人体存在、照度、灵敏度、无人延时、指示灯，以及 Z2M 自动添加的信号质量。区域/阈值、能量调试、自学习和雷达距离设置默认隐藏。在设备 **设置（特定）→ Advanced controls** 中启用 `show_advanced` 可恢复高级字段；关闭后恢复精简页，无需重启或重新配对。未保存选项时按关闭处理。
+**Customers only need this one converter file.** The default feature page shows presence, illuminance, sensitivity, absence delay, the indicator, and link quality added automatically by Z2M. Zones/thresholds, energy debugging, self-learning, and radar distance settings are hidden by default. Enable `show_advanced` under the device's **Settings (specific) → Advanced controls** to restore the advanced fields. Disabling it returns to the compact page without restarting or re-pairing. An unsaved option is treated as disabled.
 
-**HA 影响：**exposes 同时用于 HA 发现，关闭高级显示会撤回对应高级实体，开启后重新发现；使用高级 HA 实体的自动化应保持 `show_advanced: true`。全部原 flat MQTT 上报/设置接口保留，显示开关本身不写设备参数。
+**Home Assistant impact:** exposes also drive HA discovery. Hiding advanced controls withdraws the corresponding advanced entities; enabling them triggers discovery again. Automations using advanced HA entities should keep `show_advanced: true`. All existing flat MQTT reporting/setting interfaces remain available, and the display toggle itself does not write device parameters.
 
-### 协议校正
+### Protocol corrections
 
-- **雷达距离 DP2**：协议为可读写整数 `0–1500 cm`、步长 `50`，写入等待实际回报确认。已在公司样机验证 `0→50→0` 并恢复原值；这不证明实际可探测 15 米，也未解释 `0` 的特殊语义。
-- **能量命令 DP104**：`energy_streaming` 为只下发的 `ON/OFF` 命令，仍兼容原布尔值和 `ON/OFF` MQTT 输入。它不是可查询开关，GET 会明确拒绝，也不从被动 echo 伪造状态。
-- 厂家资料写每 5 秒下发心跳、10 秒未收到则停报；**本样机在 15 秒观察窗口内，最后一次心跳后 14.73 秒仍有上报**，显式 OFF 后才停止。因此转换器不依赖固件超时：本地会话最多 5 分钟，OFF、停止或热替换均清理心跳并按需显式请求关闭；等待在途 ON 完成后才发最终 OFF，新的会话等待旧清理完成。启动 ON 若确认失败，也会在同一队列内尽力发送 OFF，再返回原始错误，避免迟到的清理关闭后续新会话。关闭失败会记录警告，不能视作确认停报。
-- **区域 DP117**：10 字节，`0=屏蔽、1=有人、2=无人`。区域启用由非零值派生，不再标注未获协议支持的每区厘米边界。修改时查询完整快照并保留其他区域原始字节。
-- **能量 DP102**：前 10 字节为运动能量、后 10 字节为存在能量，按原始 `0–255` 显示；未开放语义不明的能量值写入。
-- **阈值 DP124**：两组各 10 字节，协议没有说明两组的物理角色。界面标注为 `Threshold group 1/2`，保留 `motion_threshold/presence_threshold` 旧键作兼容，不盲目交换顺序，也不再自动改写灵敏度预设。
-- `sensor_close` 只保留协议枚举含义，不解释为已确认的物理遮挡或无人；该值不覆盖最后占用值。DP105 的用途/周期、DP106/107 的功能仍未证实，不擅自启用或映射。自学习保留明确的数值枚举，去掉无依据的预热及学习时长说明。
+- **Radar distance, DP2:** the protocol defines a read/write integer of `0–1500 cm` in steps of `50`. Writes wait for an actual device report for confirmation. A company sample was tested through `0→50→0` and restored to its original value. This does not prove a 15-meter detection range or establish the special meaning of `0`.
+- **Energy command, DP104:** `energy_streaming` is a write-only `ON/OFF` command that still accepts the original boolean and `ON/OFF` MQTT inputs. It is not a queryable switch: GET is explicitly rejected, and passive echoes are not used to fabricate state.
+- Manufacturer documentation specifies a heartbeat every 5 seconds and reporting shutdown after 10 seconds without one. **Within a 15-second observation window, this sample still reported 14.73 seconds after the last heartbeat**, stopping only after explicit OFF. The converter therefore does not rely on the firmware timeout: a local session lasts at most 5 minutes, and OFF, shutdown, or hot replacement clears heartbeats and explicitly requests shutdown when needed. Final OFF is sent only after any in-flight ON completes; a new session waits for the previous cleanup. If confirmation of the initial ON fails, the same queue also attempts OFF before returning the original error, preventing late cleanup from stopping a subsequent session. A failed OFF is logged as a warning and does not confirm that reporting stopped.
+- **Zones, DP117:** 10 bytes, with `0=masked`, `1=occupied`, and `2=unoccupied`. Zone enablement is derived from nonzero values. Per-zone centimeter boundaries unsupported by the protocol are no longer labeled. Changes query a complete snapshot and preserve the other zones' raw bytes.
+- **Energy, DP102:** the first 10 bytes are motion energy and the following 10 bytes are presence energy, displayed as raw `0–255` values. Writing energy values with unclear semantics is not exposed.
+- **Thresholds, DP124:** two groups of 10 bytes; the protocol does not explain the physical role of each group. The interface labels them `Threshold group 1/2` and retains the legacy `motion_threshold/presence_threshold` keys for compatibility. It does not blindly swap their order or automatically rewrite sensitivity presets.
+- `sensor_close` retains only its protocol enumeration meaning; it is not interpreted as confirmed physical obstruction or absence and does not overwrite the last occupancy value. The purpose/period of DP105 and the functions of DP106/107 remain unconfirmed, so they are not enabled or mapped speculatively. Self-learning retains explicit numeric enumerations, with unsupported warm-up and learning-duration descriptions removed.
 
-### 安全行为与升级
+### Safety behavior and upgrading
 
-设置输入、报告类型、长度和枚举严格校验；异常包不会变成“无人”，无效输入不会变成 0。区域/阈值写前读取完整原始快照，逐设备串行操作，只改目标字节并确认回报；缺失或超时拒绝写入，同值只查询。GET 与需回读的 SET 至少间隔 3 秒发送查询，避免密集请求被固件丢弃；DP104 不发送无意义的状态查询。
+Setting inputs, report types, lengths, and enumerations are strictly validated. Malformed packets do not become “unoccupied,” and invalid inputs do not become 0. Zone/threshold writes first read a complete raw snapshot, operate serially per device, change only the target bytes, and confirm the report. Missing or timed-out snapshots cause writes to be rejected; writing the existing value only queries it. Queries for GET and SET operations requiring readback are spaced at least 3 seconds apart to avoid firmware dropping dense requests. DP104 sends no meaningless state query.
 
-区域能量和阈值的旧版 `0–100` 为归一化值，现为原始 `0–255`。旧阈值自动化常量需换算为 `round(旧值 * 255 / 100)`（旧 50 对应 128，旧 100 对应 255），历史曲线有尺度变化。新协议校正版启用高级发现时，距离字段由只读 sensor 转为 number，能量流由状态 switch 转为命令 select；select 表示最后选择的命令，不是设备的实时流状态，相关旧 HA 自动化需要检查。修改阈值不再隐式切换 `custom`。
+Zone energy and thresholds previously used normalized `0–100` values; they now use raw `0–255` values. Convert old threshold constants in automations using `round(old_value * 255 / 100)` (old 50 becomes 128; old 100 becomes 255), and account for the scale change in historical graphs. With advanced discovery enabled in the protocol-corrected version, distance changes from a read-only sensor to a number entity, while the energy stream changes from a state switch to a command select. The select represents the last chosen command, not the device's live streaming state; review related existing HA automations. Changing thresholds no longer implicitly switches to `custom`.
 
-### 验证范围
+### Validation scope
 
-公司测试使用 ZHC 26.105.0：`node --test tests/zps-z1.test.cjs tests/zps-z1-safety.test.cjs`（需提供此依赖），当前 35 项通过。覆盖精确匹配、异常数据、原始字节保留、排队快照、并发写、write-only 命令、距离校验/确认、初始/定时 ON 的停止排序、连续热替换、被动旧 echo、清理失败、初始 ON 确认丢失与重试排序、5 分钟本地限时。
+Company testing used ZHC 26.105.0 with `node --test tests/zps-z1.test.cjs tests/zps-z1-safety.test.cjs` (this dependency must be provided), with 35 tests passing in the recorded run. Coverage includes exact matching, malformed data, raw-byte preservation, queued snapshots, concurrent writes, write-only commands, distance validation/confirmation, shutdown ordering for initial/timed ON, successive hot replacements, stale passive echoes, cleanup failure, lost initial ON confirmation and retry ordering, and the 5-minute local time limit.
 
-此前样机已验证人体存在“有人→无人→有人”、照度 42→51→49 lx、LED 开→关→开、无人延时 15→16→15，并恢复 LED 开、15 秒、medium。显示选项开启61项/关闭6项（含信号质量），不触发设备命令。此次原始协议测试确认距离 `0→50→0`，记录了10秒心跳超时与实机不符及显式OFF停报；最终协议校正版的正常设置接口也通过 `0→50→0` 回读；开启能量流后热替换配置，旧会话显式 OFF 后停报，后续观察无迟到能量帧。最终距离恢复 0，能量流已显式停止，日志无目标错误。
+Earlier sample testing verified presence transitions “occupied→unoccupied→occupied,” illuminance of 42→51→49 lx, LED on→off→on, and absence delay 15→16→15. The LED, delay, and sensitivity were restored to on, 15 seconds, and medium. Enabling the display option showed 61 fields; disabling it showed 6 (including link quality), without issuing device commands. Raw-protocol testing confirmed distance `0→50→0`, documented the mismatch between the stated 10-second heartbeat timeout and physical behavior, and confirmed that explicit OFF stopped reporting. The final protocol-corrected version's normal settings interface also passed `0→50→0` readback. Hot replacement while energy streaming was active caused the old session to stop reporting after explicit OFF; subsequent observation found no late energy frames. Distance was finally restored to 0, energy streaming was explicitly stopped, and logs contained no errors for the target device.
 
-本次初始 ON 确认失败补丁通过软件故障模拟验证，尚未安装到样机；上述物理记录来自此前协议校正版。
+The patch for failed initial ON confirmation was verified through software fault simulation and has not yet been installed on the sample; the physical records above come from the preceding protocol-corrected version.
 
-客户设备、完整测距覆盖、照度绝对精度、自学习、阈值调整后的检测效果、长期功耗及整机重启恢复未验证。原厂 PDF 仅作为来源引用，不随仓库重新发布。
+Customer devices, full ranging coverage, absolute illuminance accuracy, self-learning, detection behavior after threshold changes, long-term power consumption, and recovery after a full device restart have not been verified. The manufacturer's PDF is cited as a source only and is not redistributed in this repository.
 
-## ZMS206 私有报文兼容
+## ZMS206 private-message compatibility
 
-`zms206.js` 保留 `0xE000` D0/D2 的标准应答，并为 `0xFC03` 命令 `0x00` 增加完整二进制载荷解析，由 Zigbee 协议栈按默认应答规则处理。私有载荷仅记录到调试日志，不改变设备指纹或开关状态。四路设备的 DP112–DP114 含义尚未确认，仅保留诊断日志，不提供读写控制项；后续其他未知 DP 仍保留未定义提示。
+`zms206.js` preserves the standard responses for `0xE000` D0/D2 and adds complete binary-payload parsing for `0xFC03` command `0x00`, with the Zigbee stack handling default-response rules. Private payloads are written only to debug logs and do not change device fingerprints or switch state. The meanings of DP112–DP114 on four-gang devices are unconfirmed; they remain diagnostic logs with no read/write controls. Other unknown DPs continue to produce undefined-DP notices.
 
-使用 `node --test tests/zms206.test.js` 运行 7 项定向测试。另已在 Zigbee2MQTT 2.14.1、zigbee-herdsman 10.9.2、zigbee-herdsman-converters 26.105.0 中回放捕获的 `0xFC03` 报文，验证无损解析、错误边界及 DP 转换；在 `_TZE28C1000000_y4jqpry8` 样机上完成两次状态查询和约 3 分钟空闲观察，期间 D0/D2 正常应答，未见重复帧或解析错误。`0xFC03` 在本轮实机观察中未再次自然上报，长期运行及客户多设备网络尚未验证。转换器兼容处理与 MQTT 去重不等于修复设备端所有异常上报。
+Run the 7 focused tests using `node --test tests/zms206.test.js`. Captured `0xFC03` messages were also replayed with Zigbee2MQTT 2.14.1, zigbee-herdsman 10.9.2, and zigbee-herdsman-converters 26.105.0 to verify lossless parsing, error boundaries, and DP conversion. Two state queries and approximately 3 minutes of idle observation were completed on a `_TZE28C1000000_y4jqpry8` sample; D0/D2 responses were normal, with no duplicate frames or parsing errors observed. `0xFC03` did not recur naturally during this physical-device observation. Long-term operation and customer networks with multiple devices remain unverified. Converter compatibility handling and MQTT deduplication do not establish that every abnormal report from the device has been fixed.
 
-## ZMS1-TYZ 功能与验证范围
+## ZMS1-TYZ features and validation scope
 
-将 `zms1.js` 添加到 Zigbee2MQTT 的外部转换器中。两种指纹分别匹配，功能不会混用：
+Add `zms1.js` to Zigbee2MQTT's external converters. The two fingerprints are matched separately and do not share unsupported features:
 
-| 指纹 | 功能 | 验证情况 |
+| Fingerprint | Features | Validation |
 | --- | --- | --- |
-| `TS0601 / _TZE284_zuq5xxib` | 开、关、停止；0–100 整数百分比；`invert_cover`；`running`；`options.reverse_direction`；`options.motor_speed`（原始值 0–255） | 已在 Z2M 加载并选中；开/关各运行约 3 秒后停止，经现场确认输出轴反向转动并正常停止。无轨道，实际行程和百分比未验证；方向设置和调速未实测 |
-| `TS0601 / _TZE200_fu14oapz` | 开、关、停止；0–100 整数百分比；`invert_cover`；`running`；`work_state_raw`（DP7）和 `fault_raw`（DP12） | 按已合并的上游 PR #13208 适配；仅完成源码、指纹选择和模拟协议测试，未进行该指纹实机测试。不提供方向和调速入口 |
+| `TS0601 / _TZE284_zuq5xxib` | Open, close, stop; integer percentages 0–100; `invert_cover`; `running`; `options.reverse_direction`; `options.motor_speed` (raw values 0–255) | Loaded and selected in Z2M; open and close each ran for approximately 3 seconds before stopping, with on-site confirmation that the output shaft turned in opposite directions and stopped normally. No track was installed, so actual travel and percentage positioning were not verified; direction settings and speed adjustment were not physically tested |
+| `TS0601 / _TZE200_fu14oapz` | Open, close, stop; integer percentages 0–100; `invert_cover`; `running`; `work_state_raw` (DP7) and `fault_raw` (DP12) | Adapted from the merged upstream PR #13208; only source checks, fingerprint selection, and simulated protocol tests were completed, with no physical testing of this fingerprint. No direction or speed controls are provided |
 
-`running` 由位置上报推断，缺少持续上报时会在约 3 秒后复位，不是独立运动传感器。`work_state_raw` 和 `fault_raw` 保留 datatype 与十六进制字节；枚举及故障位含义尚未确认，不能把原始值当作已解释的故障状态。方向和速度只在收到对应设备回报后更新显示，不把下发成功当作状态回读。校准、限位和点动不在本配置范围内。
+`running` is inferred from position reports and resets after approximately 3 seconds without continuing reports; it is not an independent motion sensor. `work_state_raw` and `fault_raw` preserve the datatype and hexadecimal bytes. The enumeration and fault-bit meanings remain unconfirmed, so raw values must not be treated as interpreted fault states. Direction and speed displays update only after the corresponding device reports arrive; successful command transmission is not treated as state readback. Calibration, limits, and inching are outside this configuration's scope.
 
-位置输入严格限定为数值整数 0–100；空值、布尔值、字符串、小数和越界值均拒绝，避免上游 legacy 类型转换导致误动作。已通过 zigbee-herdsman-converters 26.105.0 和 26.109.0 的定向测试；运行 `node tests/test_zms1.cjs` 需先在模块搜索路径中提供该依赖。
+Position inputs must be numeric integers from 0–100. Null values, booleans, strings, fractions, and out-of-range values are rejected to prevent unintended actions caused by upstream legacy type conversion. Focused tests passed with zigbee-herdsman-converters 26.105.0 and 26.109.0. To run `node tests/test_zms1.cjs`, first make that dependency available in the module search path.
 
-来源：[ZMS1-TYZ 上游功能](https://www.zigbee2mqtt.io/devices/ZMS1-TYZ.html)、[原始 ZMS1 支持 PR #9235](https://github.com/Koenkk/zigbee-herdsman-converters/pull/9235)、[fu14oapz 支持 PR #13208](https://github.com/Koenkk/zigbee-herdsman-converters/pull/13208)。方向/速度在 284 版本上属于依据 204 同族实现提供的待验证功能。仓库发布不代表所有功能已完成实机验收。
+Sources: [upstream ZMS1-TYZ features](https://www.zigbee2mqtt.io/devices/ZMS1-TYZ.html), [original ZMS1 support PR #9235](https://github.com/Koenkk/zigbee-herdsman-converters/pull/9235), and [fu14oapz support PR #13208](https://github.com/Koenkk/zigbee-herdsman-converters/pull/13208). Direction/speed controls on the 284 variant are unverified features based on the related 204 implementation. Publishing this repository does not mean every feature has completed physical acceptance testing.
 
-## ZM16B 电量说明
+## ZM16B battery reporting
 
-`zemismart_zm16b.js` 用于 `TS0601 / _TZE284_3mzb0sdz` 管状电机。若设备入网后电量超过 24 小时仍为空，通常不是 DP 映射缺失，而是设备没有主动上报 `DP13`。
+`zemismart_zm16b.js` supports the `TS0601 / _TZE284_3mzb0sdz` tubular motor. If the battery value remains empty more than 24 hours after joining, the usual cause is that the device has not spontaneously reported `DP13`, rather than a missing DP mapping.
 
-该转换器会在配置、设备上线、每 12 小时定时查询和手动读取电量时发送 Tuya `dataQuery`，促使设备回报 `DP13`：
+The converter sends Tuya `dataQuery` during configuration, when the device comes online, every 12 hours, and on manual battery reads to prompt the device to report `DP13`:
 
 ```yaml
 external_converters:
   - external_converters/zemismart_zm16b.js
 ```
 
-也可以通过 Zigbee2MQTT 手动触发一次电量查询：
+You can also manually request a battery reading through Zigbee2MQTT:
 
 ```json
 topic: zigbee2mqtt/<friendly_name>/get
